@@ -804,3 +804,12 @@ CREATE TABLE IF NOT EXISTS host_pairing (
 -- Mele Host 推送中转（10-04）：apns_token 写成 relay:<编号> 的设备走Tilia的中转站；内容用手机给的钥匙加密，中转看不见
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS relay_secret TEXT;
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS push_key TEXT;
+
+-- Mele Host 搬家（10-05）：手机里哪些房间条目已经搬过（kind + 手机里的编号），再点「搬过去」只补新的
+CREATE TABLE IF NOT EXISTS host_imported (
+  account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  kind       TEXT NOT NULL,
+  local_id   TEXT NOT NULL,
+  PRIMARY KEY (account_id, kind, local_id)
+);
+ALTER TABLE host_imported ADD COLUMN IF NOT EXISTS host_id TEXT;   -- 搬过来后在 Host 上的编号（书、划线、饮食照片：后面的条目要接回去）

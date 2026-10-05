@@ -71,13 +71,46 @@ enum HostLink {
 
     #if LITE
     /// 搬家（第三步）：手机里的核心东西整包交给 Host（/me/import）；手机里的原件不删。返回搬了多少
-    static func moveFromPhone() async throws -> [String: Int] {
+    /// 带文件的房间（10-05 第二批）：先 /me/import/files 问 Host 缺哪些指纹，一个个 PUT 上去，最后整包交 /me/import。
+    /// progress(传了几个, 一共几个)；中途断了再点一次，传过的、搬过的都不再传。
+    static func moveFromPhone(progress: (@MainActor (Int, Int) -> Void)? = nil) async throws -> [String: Int] {
         guard let link = current else { throw Failure(message: String(localized: "还没连上 Mele Host")) }
-        var req = URLRequest(url: link.url.appendingPathComponent("me/import"), timeoutInterval: 300)
-        req.httpMethod = "POST"
+        let (bundle, files) = await Task.detached(priority: .userInitiated) { LocalExport.hostBundle(withFiles: true) }.value
+        func request(_ path: String, _ method: String, timeout: TimeInterval) -> URLRequest {
+            var r = URLRequest(url: link.url.appendingPathComponent(path), timeoutInterval: timeout)
+            r.httpMethod = method
+            r.setValue("Bearer \(link.token)", forHTTPHeaderField: "Authorization")
+            return r
+        }
+        var ask = request("me/import/files", "POST", timeout: 60)
+        ask.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        ask.httpBody = try JSONSerialization.data(withJSONObject: ["rooms": bundle["rooms"] ?? [String: Any]()])
+        var missing: [String] = []
+        do {
+            let (d, r) = try await URLSession.shared.data(for: ask)
+            if (r as? HTTPURLResponse)?.statusCode == 200 {          // 老 Host 没这个接口（404）：只搬文字的
+                missing = ((try? JSONSerialization.jsonObject(with: d)) as? [String: Any])?["missing"] as? [String] ?? []
+            }
+        } catch {
+            throw Failure(message: String(localized: "搬到一半断了：网络不稳，再试一次（已经搬过去的不会重复）"))
+        }
+        let todo = missing.filter { files[$0] != nil }
+        for (i, h) in todo.enumerated() {
+            await progress?(i, todo.count)
+            guard let url = files[h], let data = try? Data(contentsOf: url) else { continue }
+            var put = request("me/import/files/\(h)", "PUT", timeout: 180)
+            put.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+            do {
+                let (_, r) = try await URLSession.shared.upload(for: put, from: data)
+                if (r as? HTTPURLResponse)?.statusCode != 204 { continue }   // 这一个不收（太大 / 坏了）：那一条留在手机里
+            } catch {
+                throw Failure(message: String(localized: "传照片传到一半断了：网络不稳，再点一次接着传（传过的不重传）"))
+            }
+        }
+        if !todo.isEmpty { await progress?(todo.count, todo.count) }
+        var req = request("me/import", "POST", timeout: 300)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue("Bearer \(link.token)", forHTTPHeaderField: "Authorization")
-        req.httpBody = try JSONSerialization.data(withJSONObject: LocalExport.hostBundle())
+        req.httpBody = try JSONSerialization.data(withJSONObject: bundle)
         let data: Data, resp: URLResponse
         do { (data, resp) = try await URLSession.shared.data(for: req) } catch {
             throw Failure(message: String(localized: "搬到一半断了：网络不稳，再试一次（已经搬过去的不会重复）"))
@@ -86,7 +119,15 @@ enum HostLink {
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else {
             throw Failure(message: body["detail"] as? String ?? String(localized: "没搬成"))
         }
-        return body.compactMapValues { $0 as? Int }
+        var out = body.compactMapValues { $0 as? Int }
+        // 房间（10-05）：服务器回 {kind: 几条}，这里只要一个总数
+        if let r = body["rooms"] as? [String: Any] { out["rooms"] = r.values.compactMap { $0 as? Int }.reduce(0, +) }
+        return out
+    }
+
+    static func movingLabel(_ sent: (Int, Int)?) -> String {
+        guard let (n, all) = sent, all > 0 else { return String(localized: "搬家中…") }
+        return n < all ? String(localized: "传文件 \(n + 1)/\(all)…") : String(localized: "搬家中…")
     }
     #endif
 
@@ -124,15 +165,16 @@ struct HostCard: View {
     @State private var confirmLeave = false
     @State private var moving = false
     @State private var movedNote: String?
+    @State private var sent: (Int, Int)?
 
     #if LITE
     /// 连的时候没搬、或者后来手机里又多了：再搬一次（已经搬过的不重复）
     private func move() async {
         moving = true
-        defer { moving = false }
+        defer { moving = false; sent = nil }
         do {
-            let got = try await HostLink.moveFromPhone()
-            movedNote = String(localized: "搬好了：\(got["companions"] ?? 0) 个联系人、\(got["messages"] ?? 0) 条聊天（已经在 Host 上的没重复搬）")
+            let got = try await HostLink.moveFromPhone { sent = ($0, $1) }
+            movedNote = String(localized: "搬好了：\(got["companions"] ?? 0) 个联系人、\(got["messages"] ?? 0) 条聊天、房间里 \(got["rooms"] ?? 0) 样东西（已经在 Host 上的没重复搬）")
             if (got["companions"] ?? 0) > 0 { session.switchHost() }
         } catch {
             movedNote = error.localizedDescription
@@ -158,7 +200,7 @@ struct HostCard: View {
                 }
                 Hint(text: String(localized: "TA 在 Host 上：你关掉 App 它也会想起你、自己醒来。手机里的地图、小号、记忆库连着 Host 时先收起来，断开就回来。"))
                 #if LITE
-                Button(moving ? String(localized: "搬家中…") : String(localized: "把手机里的搬过来")) { Task { await move() } }
+                Button(moving ? HostLink.movingLabel(sent) : String(localized: "把手机里的搬过来")) { Task { await move() } }
                     .font(Typo.sans(Typo.Size.callout, .medium)).foregroundStyle(theme.accentDeep).disabled(moving)
                 if let movedNote { Hint(text: movedNote) }
                 #endif
@@ -201,6 +243,7 @@ struct HostConnectSheet: View {
     @State private var error: String?
     @State private var phoneHas: (companions: Int, messages: Int)?     // 连上了、手机里有东西：问搬不搬
     @State private var moved: String?
+    @State private var sent: (Int, Int)?
 
     init(address: String = "", code: String = "") {
         _address = State(initialValue: address)
@@ -220,7 +263,7 @@ struct HostConnectSheet: View {
                 Label(String(localized: "连上了"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 Text("手机里有 \(has.companions) 个联系人、\(has.messages) 条聊天。要搬到 Host 上吗？")
             } footer: {
-                Text("搬的是：我的设定、模型钥匙、联系人（人设、设置、头像）、平常窗口的聊天。日记、相册、书架这些房间还在手机里，之后再搬。手机里的原件一个都不删，断开就回来。")
+                Text("搬的是：我的设定、模型钥匙、联系人（人设、设置、头像）、平常窗口的聊天，还有日记、信、远事、待办、钱包、人物卡、世界书、收藏夹、相册、表情包、书架、饮食、朋友圈、塔罗。照片多的话要传一会儿，中途断了再点一次接着传。手机里的原件一个都不删，断开就回来。")
             }
             if let moved {
                 Section {
@@ -230,7 +273,7 @@ struct HostConnectSheet: View {
             } else {
                 Section {
                     #if LITE
-                    Button(busy ? String(localized: "搬家中…") : String(localized: "搬过去")) { Task { await move() } }.disabled(busy)
+                    Button(busy ? HostLink.movingLabel(sent) : String(localized: "搬过去")) { Task { await move() } }.disabled(busy)
                     #endif
                     Button(String(localized: "先不搬，Host 上从头开始")) { finish() }.disabled(busy)
                 }
@@ -283,10 +326,10 @@ struct HostConnectSheet: View {
     #if LITE
     private func move() async {
         busy = true; error = nil
-        defer { busy = false }
+        defer { busy = false; sent = nil }
         do {
-            let got = try await HostLink.moveFromPhone()
-            moved = String(localized: "搬好了：\(got["companions"] ?? 0) 个联系人、\(got["messages"] ?? 0) 条聊天")
+            let got = try await HostLink.moveFromPhone { sent = ($0, $1) }
+            moved = String(localized: "搬好了：\(got["companions"] ?? 0) 个联系人、\(got["messages"] ?? 0) 条聊天、房间里 \(got["rooms"] ?? 0) 样东西")
         } catch {
             self.error = error.localizedDescription
         }
