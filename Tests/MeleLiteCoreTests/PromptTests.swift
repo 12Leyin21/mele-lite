@@ -90,4 +90,15 @@ import Testing
         c.mode = ChatMode.offline
         #expect(!sys().contains("你的日子就是"))                                       // 线下那段不受影响
     }
+
+    @Test func customTalkRulesReplaceTheFactoryOnes() {
+        var c = sampleContact()
+        #expect(Prompt.build(input(c)).system.contains("大多数时候回一两句就够") && !Prompt.build(input(c)).system.contains("{talk}"))
+        c.talkRules = "每次都写满三段，多用颜文字。"
+        let s = Prompt.build(input(c)).system
+        #expect(s.contains("每次都写满三段，多用颜文字。") && !s.contains("大多数时候回一两句就够"))
+        #expect(s.contains("一条消息一段"))                                   // 分段发消息是机制，不归用户换
+        c.talkRules = "  "
+        #expect(Prompt.build(input(c)).system.contains("大多数时候回一两句就够"))
+    }
 }

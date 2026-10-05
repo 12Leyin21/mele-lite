@@ -417,6 +417,7 @@ CREATE TABLE IF NOT EXISTS music_pools (                -- 每日私选的候选
 );
 ALTER TABLE music_links ADD COLUMN IF NOT EXISTS picks_n  INT  NOT NULL DEFAULT 3;    -- 每天几首（0 = 不推）
 ALTER TABLE music_links ADD COLUMN IF NOT EXISTS picks_at TEXT NOT NULL DEFAULT '';   -- 几点推（空 = 起床后半小时）
+ALTER TABLE music_links ADD COLUMN IF NOT EXISTS lyrics   BOOLEAN NOT NULL DEFAULT FALSE; -- Host 上要不要去 lrclib 拿歌词（10-05，主人自己开）
 
 -- 耳朵（09-30，plans/2026-09-30-ears.md）：一首歌只听一次，全服务器共用（不是谁的私人数据，只有歌本身的信息）。
 CREATE TABLE IF NOT EXISTS song_ears (

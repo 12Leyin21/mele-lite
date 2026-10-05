@@ -11,6 +11,13 @@ struct AdvancedSettingsView: View {
     @State private var synced: Int?
     @State private var confirmDelete = false
 
+    /// 出厂的说话规矩（跟 MeleLiteCore Prompts/zh/modes.md 的 [talk]、服务器说明书「格式」那两条同一个意思）
+    static var factoryTalk: String {
+        Locale.current.language.languageCode?.identifier == "en"
+            ? "Write the way you'd text someone you know; if it fits in one line, keep it to one.\nMost of the time a line or two is enough, like a quick text back: pick up what they just said, add a bit of your own reaction or ask one small thing, and stop. When they write a lot or it's something that matters, say more.\nOnline, you're just texting: say what you want to say straight out, every line is a line you actually send."
+            : "像你平时给熟人发消息那样说话，能一句说完就一句。\n大多数时候回一两句就够，像随手回微信：接住对方这一句，加一点你自己的反应，或者问一件小事，就停。对方说得长、聊到要紧的事，你再多说几句。\n线上就是发消息：想说的直接说出来，一句是一句。"
+    }
+
     private func note(_ s: String) -> some View {
         Text(s).font(Typo.sans(Typo.Size.caption)).foregroundStyle(theme.inkFaint)
     }
@@ -52,7 +59,20 @@ struct AdvancedSettingsView: View {
                     row(n == 0 ? String(localized: "每次最多 · 不限") : String(localized: "每次最多 \(n) 条"),
                         "一次回复最多切成几条消息")
                 }
-            } header: { GlassHeader(String(localized: "回话")) }
+                // 说话规矩（10-05 Tilia：用户能自己改出厂的说话风格；分段发消息、记东西这些不归这里）
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline) {
+                        row("说话规矩", "日常聊天时说多长、怎么接话。空着用出厂的；写了就换成你的")
+                        Spacer()
+                        Button("看出厂的") { store.s("talk_rules", "").wrappedValue = Self.factoryTalk }
+                            .font(Typo.sans(Typo.Size.caption, .medium)).foregroundStyle(theme.accentDeep).buttonStyle(.plain)
+                    }
+                    TextEditor(text: store.s("talk_rules", ""))
+                        .font(Typo.sans(Typo.Size.callout)).frame(minHeight: 90).scrollContentBackground(.hidden)
+                }
+            } header: { GlassHeader(String(localized: "回话")) } footer: {
+                Text("说话规矩只管说话的样子；分段发消息、记东西、发表情包这些不受影响。线下（长文）有自己的写法，不看这里。")
+            }
 
             Tile {
                 Toggle(isOn: store.s("thinking", true)) { row("想事", "回话前先想一想（关了就没有思考过程）") }

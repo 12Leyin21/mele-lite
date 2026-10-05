@@ -51,3 +51,13 @@ def test_offline_life_off_swaps_the_own_day_lines():
     assert "吃饭、出门" in on and "吃饭、出门" not in off and "你的日子就是和 TA 说话的这些时候" in off
     assert "大多数时候回一两句就够" in on and "大多数时候回一两句就够" in off
     assert "go out" not in render_handbook("en", life=False)
+
+
+def test_custom_talk_rules_replace_the_factory_two():
+    """说话规矩（10-05）：用户写了就换掉「一两句就够 / 直接说」那两条；分段、纯文字照旧"""
+    from brain.manuals import render_handbook
+    mine = render_handbook("zh", talk="每次都写满三段\n- 多用颜文字")
+    assert "- 每次都写满三段\n- 多用颜文字\n" in mine and "大多数时候回一两句就够" not in mine
+    assert "一条消息一段" in mine and "写纯文字" in mine
+    assert "大多数时候回一两句就够" in render_handbook("zh", talk="   ")
+    assert "a line or two" not in render_handbook("en", talk="Write long letters.")

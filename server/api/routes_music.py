@@ -32,9 +32,9 @@ async def _lang(pool, acc: UUID) -> str:
 
 def _view(link) -> dict:
     if link is None:
-        return {"platform": None, "linked": False, "storefront": "", "picks_n": 0, "picks_at": ""}
+        return {"platform": None, "linked": False, "storefront": "", "picks_n": 0, "picks_at": "", "lyrics": False}
     return {"platform": link.platform, "linked": bool(link.user_token), "storefront": link.storefront,
-            "picks_n": link.picks_n, "picks_at": link.picks_at}
+            "picks_n": link.picks_n, "picks_at": link.picks_at, "lyrics": link.lyrics}
 
 
 @router.get("/me/music")
@@ -52,7 +52,7 @@ async def put_music(body: dict = Body(...), acc: UUID = Depends(account), a: Api
     # 没凭证（比如没有 Apple Music 会员，09-30）：手机自己知道在哪个区，报上来给私选找歌用；有凭证的以苹果回的为准
     storefront = str(body.get("storefront") or "").strip().lower()
     storefront = storefront if len(storefront) == 2 and storefront.isalpha() else ""
-    if platform == "apple" and token:
+    if platform == "apple" and token and getattr(a.deps.music, "user_features", True):   # iTunes 找歌（Host）没有凭证那一套
         if a.deps.music is None:
             raise HTTPException(503, "服务器还没配 Apple Music，过一阵再连")
         storefront = await a.deps.music.storefront(token)
@@ -74,6 +74,8 @@ async def patch_music(body: dict = Body(...), acc: UUID = Depends(account), a: A
         if not 0 <= n <= 5:
             raise HTTPException(400, "每天 0~5 首")
         await pool.execute("UPDATE music_links SET picks_n = $2 WHERE account_id = $1", acc, n)
+    if "lyrics" in body:                     # Host 的歌词开关（10-05）：只管以后新听的歌
+        await pool.execute("UPDATE music_links SET lyrics = $2 WHERE account_id = $1", acc, bool(body["lyrics"]))
     if "picks_at" in body:
         at = str(body["picks_at"] or "")
         if at:

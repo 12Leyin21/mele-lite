@@ -137,6 +137,17 @@ struct MusicRoomView: View {
                 .padding(.vertical, 12)
                 Divider()
                 PicksTimeRow(value: music.link?.picks_at ?? "") { at in Task { await music.setPicks(at: at) } }
+                if Lite.hosted {        // 歌词（10-05 Tilia）：Host 默认不拿，主人自己开
+                    Divider()
+                    Toggle(isOn: Binding(get: { music.link?.lyrics ?? false }, set: { on in Task { await music.setLyrics(on) } })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("歌词").font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.ink)
+                            Text("打开后，你的 Host 会去 lrclib（大家共建的歌词库）拿歌词，\(aiName) 能跟着你听到哪一句。只管以后新听的歌。")
+                                .font(Typo.sans(Typo.Size.caption)).foregroundStyle(theme.inkFaint)
+                        }
+                    }
+                    .padding(.vertical, 12)
+                }
             }
             .padding(.horizontal, 16)
             .cardSurface(radius: 16)

@@ -91,6 +91,7 @@ class Settings:
     voice_id: str = ""                  # 它的嗓子（ElevenLabs voice_id）；空 = 用出厂那把（brain/voice.PRESETS 第一把）
     voice_name: str = ""                # 嗓子的名字（设置页显示）
     mcp_servers: list[str] = field(default_factory=list)   # 这个 TA 能用的 MCP 服务（10-05，Host；brain/mcp.py）
+    talk_rules: str = ""                # 说话规矩（10-05）：用户写了就换掉说明书里出厂的两条（一两句就够 / 直接说）；空 = 出厂
     offline_life: bool = False          # 线下生活（10-05）：关着 = 说明书里没有「你有自己的一天」；Lite 本机还管地图 / 它的一天
 
     def to_dict(self) -> dict:
@@ -122,6 +123,8 @@ class Settings:
         if not isinstance(self.mcp_servers, list) or len(self.mcp_servers) > 20:
             raise ValueError("mcp_servers must be a list of at most 20 ids")
         self.mcp_servers = [str(x) for x in self.mcp_servers]
+        if len(self.talk_rules or "") > 2000:
+            raise ValueError("talk_rules must be at most 2000 characters")
         self.user_name = (self.user_name or "").strip()
         if len(self.user_name) > 20:
             raise ValueError("user_name must be at most 20 characters")

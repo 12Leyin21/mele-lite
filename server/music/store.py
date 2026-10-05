@@ -19,6 +19,7 @@ class Link:
     storefront: str
     picks_n: int = 3
     picks_at: str = ""
+    lyrics: bool = False
 
 
 async def link(pool, box, account: UUID, *, platform: str, user_token: str | None = None, storefront: str = "") -> None:
@@ -41,12 +42,12 @@ async def storefront_of(pool, account: UUID) -> str:
 
 
 async def get_link(pool, box, account: UUID) -> Link | None:
-    r = await pool.fetchrow("SELECT platform, user_token, storefront, picks_n, picks_at FROM music_links "
+    r = await pool.fetchrow("SELECT platform, user_token, storefront, picks_n, picks_at, lyrics FROM music_links "
                             "WHERE account_id = $1", account)
     if r is None:
         return None
     return Link(r["platform"], box.unlock(bytes(r["user_token"])) if r["user_token"] else None, r["storefront"],
-                r["picks_n"], r["picks_at"])
+                r["picks_n"], r["picks_at"], r["lyrics"])
 
 
 async def shelve(pool, account: UUID, s: Song, *, source: str, why: str) -> None:

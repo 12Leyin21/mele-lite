@@ -417,7 +417,8 @@ async def run_turn(deps: Deps, scope: Scope | UUID, text: str, emit: Emit, *, re
                          + ([] if scope.incognito else voice.mode_lines(lang, settings.voice_mode)),
                          relationship=settings.relationship, lore=lore.always_block(lore_all, lang),
                          chat_rules=not settings.long_mode,
-                         life=settings.offline_life or settings.long_mode),   # 线下生活关着：没有出门吃饭那两行（10-05）     # 长文模式：拿掉「说话」那一节（10-01 Tilia）
+                         life=settings.offline_life or settings.long_mode,   # 线下生活关着：没有出门吃饭那两行（10-05）
+                         talk=settings.talk_rules),                         # 用户自己写的说话规矩（10-05）     # 长文模式：拿掉「说话」那一节（10-01 Tilia）
         ledger=ledger.render_ledger(await archive.get_ledger(pool, conv), state.get("voice_samples", []), lang,
                                    settings.user_name),
         history=hist,
@@ -425,7 +426,7 @@ async def run_turn(deps: Deps, scope: Scope | UUID, text: str, emit: Emit, *, re
         user_text=with_tools_note(tools_note, wake or text_for_model),
         # 人设锚（10-01 Tilia：怕脱离人设）：离最新对话最近的一行，每轮十几个字
         tail="\n".join([*thinking_lines, TEXTS[lang]["anchor"].format(name=persona.name or "Lumi")
-                         + ("" if settings.long_mode else TEXTS[lang]["short"])]),
+                         + ("" if settings.long_mode or settings.talk_rules.strip() else TEXTS[lang]["short"])]),
         images=images,
     )
     req = build_request(parts, model=route.chat_model, thinking=mode == "native", user_tag=user_tag(acc),

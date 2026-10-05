@@ -51,7 +51,10 @@ public enum Prompt {
         if !who.isEmpty { parts.append((zh ? "## 对面这个人\n" : "## The person you're talking to\n") + who.joined(separator: "\n")) }
         // 线上那段的「你有自己的一天」看线下生活开关（10-05 Tilia：谈人机恋的有人不喜欢 AI 角色扮演，默认关）
         parts.append(c.mode == .online
-            ? Resources.mode("online", i.lang).replacingOccurrences(of: "{life}", with: Resources.mode((c.offlineLife ?? true) ? "life_on" : "life_off", i.lang))
+            ? Resources.mode("online", i.lang)
+                .replacingOccurrences(of: "{talk}", with: c.talkRules.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .flatMap { $0.isEmpty ? nil : $0 } ?? Resources.mode("talk", i.lang))   // 说话规矩：用户写了就换成他的（10-05）
+                .replacingOccurrences(of: "{life}", with: Resources.mode((c.offlineLife ?? true) ? "life_on" : "life_off", i.lang))
             : Resources.mode("offline", i.lang))
         let caps = i.stickers.map(\.caption).filter { !$0.isEmpty }
         if !caps.isEmpty { parts.append((zh ? "## 你的表情包\n" : "## Your stickers\n") + caps.map { "- " + $0 }.joined(separator: "\n")) }

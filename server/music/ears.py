@@ -86,6 +86,13 @@ def parse_lrc(text: str) -> list[dict]:
     return sorted(out, key=lambda x: x["t"])
 
 
+async def lyrics_on(pool) -> bool:
+    """Host 上主人在 App 里开了「歌词」就拿（10-05 Tilia）；环境变量写了以它为准；正式版照旧开。"""
+    if os.environ.get("NEWAPP_LYRICS") is not None or os.environ.get("NEWAPP_HOST", "0") != "1":
+        return lyrics_enabled()
+    return bool(await pool.fetchval("SELECT bool_or(lyrics) FROM music_links"))
+
+
 def lyrics_enabled() -> bool:
     """要不要去 lrclib 取词。NEWAPP_LYRICS=1/0 说了算；没写就看是不是 Mele Host——Host 默认关（10-05：歌词有版权，
     别人自部署的不替他去抓）。"""
@@ -297,7 +304,7 @@ async def hear(deps, song_id: str, storefront: str, lang: str) -> str:
     alt = (await alt_names(deps.music, [song_id], sf, "zh")).get(song_id)
     if alt and (alt.name, alt.artist) not in names:
         names.append((alt.name, alt.artist))
-    lyrics = await lrclib(names, duration, get=t.get) if lyrics_enabled() else []
+    lyrics = await lrclib(names, duration, get=t.get) if await lyrics_on(pool) else []
     ok = bool(nums or text or lyrics)
     await save(pool, song_id, name=s.name, artist=s.artist, duration_s=duration, numbers=nums,
                impression={lang: text} if text else {}, lyrics=lyrics, lyrics_source="lrclib" if lyrics else "",

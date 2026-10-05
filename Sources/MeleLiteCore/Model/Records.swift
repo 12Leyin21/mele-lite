@@ -45,6 +45,10 @@ public struct Contact: Codable, Identifiable, Equatable, Sendable {
     public var identities: [Identity]
     /// 线下生活（10-05）：开着 = 它有自己的一天（吃饭、出门……）；关着 = 它的日子就是跟你聊天。nil = 开（老数据）
     public var offlineLife: Bool?
+    /// 说话规矩（10-05 Tilia：用户能改出厂的说话风格）：线上那段「说多长、怎么接话」换成这个；nil / 空 = 出厂
+    public var talkRules: String?
+    /// 出厂的说话规矩（设置页「看出厂的」用）
+    public static func factoryTalk(_ lang: Lang) -> String { Resources.mode("talk", lang) }
 
     public init(id: String = UUID().uuidString, name: String, avatarFile: String? = nil, persona: String,
                 mode: ChatMode = .online, provider: ProviderConfig, userName: String = "") {

@@ -486,7 +486,7 @@ struct CompanionSettingsView: View {
         return String(localized: "一个月最多 \(l.wakesPerMonth) 次")
     }
 
-    private var patrol: some View {
+    @ViewBuilder private var patrol: some View {
         Tile {
             let level = store.s("patrol_level", "mid")
             Picker("多久来找你", selection: level) {
@@ -504,12 +504,12 @@ struct CompanionSettingsView: View {
                         note("起床前半小时把你今天的事过一遍，静音发过来，不吵醒你")
                     }
                 }
-                if store.keyID != nil {                           // 日记（10-01 Tilia）：付费的能关、能调长短；免费固定 300 字
+                if store.keyID != nil && !Lite.local {            // 日记（10-01 Tilia）：付费的能关、能调长短；免费固定 300 字（本机的在下面单独一格）
                     Toggle(isOn: store.s("diary_on", true)) {
                         Text("每晚写日记").font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.ink)
                     }
                 }
-                if store.keyID != nil && (store.settings["diary_on"] as? Bool ?? true) {
+                if store.keyID != nil && !Lite.local && (store.settings["diary_on"] as? Bool ?? true) {
                     let chars = store.s("diary_chars", 600)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(String(localized: "日记最多写 \(chars.wrappedValue) 字")).font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.ink)
@@ -526,6 +526,28 @@ struct CompanionSettingsView: View {
             Text("档位管 TA 自己想起你的频率。")
         }
         .needsHost()
+        if Lite.local && model.companions.first?.id == companion.id {
+            localDiary
+        }
+    }
+
+    /// 本机的日记（10-05）：打开 App 时补写昨天的，所以不用灰着
+    private var localDiary: some View {
+        Tile {
+            Toggle(isOn: store.s("diary_on", true)) {
+                Text("写日记").font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.ink)
+            }
+            if store.settings["diary_on"] as? Bool ?? true {
+                let chars = store.s("diary_chars", 600)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(localized: "日记最多写 \(chars.wrappedValue) 字")).font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.ink)
+                    Slider(value: Binding(get: { Double(chars.wrappedValue) }, set: { chars.wrappedValue = Int($0 / 100) * 100 }),
+                           in: 300...1500, step: 100)
+                }
+            }
+        } header: { GlassHeader("日记") } footer: {
+            Text("每天第一次打开 App 时，昨天你们聊过的话，TA 会写一篇昨天的日记；你那天写了日记，TA 会在页边留一句。用的是你自己的 key，写得越长越贵。")
+        }
     }
 
     private var memory: some View {

@@ -35,6 +35,7 @@ final class LocalHost: @unchecked Sendable {
         case ("GET", 1) where p[0] == "companions":
             if store.companions.isEmpty { _ = createCompanion(name: "Lumi") }      // 跟 Mele 一样：第一次打开就有一个 Lumi
             brain.maybeWriteLetters()                                               // App 一打开会拉联系人：顺手看看要不要留信
+            LocalDiary.maybeWrite(self)                                             // 昨天聊过、还没写昨天的：补写日记（10-05）
             LocalFriends.tick(self)                                                 // 到点的好友申请顺手通过
             LocalMusic.maybePick(self)                                              // 过了推歌时间、今天还没推：推今天的私选
             return .json(store.companions.map { companionOut($0) })
@@ -193,7 +194,7 @@ final class LocalHost: @unchecked Sendable {
         "ledger_same_as_chat": false, "sentinels": ["thinking_style": true, "tool_reminder": true, "remembered": true],
         "tool_reminder_every": 5, "thinking_style_text": "", "injections": [Any](), "patrol_level": "mid",
         "heartbeat_on": true, "morning_on": true, "sleep_from": "00:00", "sleep_to": "08:00", "patrol_overrides": [String: Any](),
-        "relationship": "", "cache_keepalive": false, "diary_on": true, "offline_life": false, "diary_chars": 600, "voice_mode": "sometimes",
+        "relationship": "", "cache_keepalive": false, "diary_on": true, "offline_life": false, "talk_rules": "", "diary_chars": 600, "voice_mode": "sometimes",
         "voice_id": "", "voice_name": "",
     ]
 

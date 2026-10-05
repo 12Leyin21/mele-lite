@@ -19,6 +19,7 @@ struct MusicLinkInfo: Decodable, Equatable {
     let storefront: String
     let picks_n: Int
     let picks_at: String
+    var lyrics: Bool?          // Mele Host 的歌词开关（10-05）；本机 / 老服务器没有
 }
 
 struct DailyPick: Decodable, Identifiable, Equatable {
@@ -196,6 +197,11 @@ final class MusicStore: ObservableObject {
     func disconnect() async {
         try? await api?.send("DELETE", "me/music")
         link = nil
+    }
+
+    func setLyrics(_ on: Bool) async {
+        do { link = try await api?.call("PATCH", "me/music", json: ["lyrics": on], as: MusicLinkInfo.self) }
+        catch let e as APIError { error = e.message } catch {}
     }
 
     func setPicks(count: Int? = nil, at: String? = nil) async {

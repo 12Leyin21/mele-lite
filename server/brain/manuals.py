@@ -51,7 +51,17 @@ _LIFE_OFF = {
 }
 
 
-def render_handbook(lang: str, chat_rules: bool = True, life: bool = True) -> str:
+# 说话规矩（10-05 Tilia：用户能换掉出厂的说话风格）：说明书「格式」里这两条，用户写了就换成他的（分段发消息、纯文字是机制，不换）
+_TALK_FACTORY = {
+    "zh": ("- 大多数时候回一两句就够，像随手回微信：接住 TA 这一句，加一点你自己的反应，或者问一件小事，就停。TA 说得长、聊到要紧的事，你再多说几句。\n"
+           "- 线上就是发消息：想说的直接说出来，一句是一句。\n"),
+    "en": ("- Most of the time a line or two is enough, like a quick text back: pick up what they just said, add a bit of your own reaction "
+           "or ask one small thing, and stop. When they write a lot or it's something that matters, say more.\n"
+           "- Online, you're just texting: say what you want to say straight out, every line is a line you actually send.\n"),
+}
+
+
+def render_handbook(lang: str, chat_rules: bool = True, life: bool = True, talk: str = "") -> str:
     """chat_rules=False（长文模式，10-01 Tilia）：说明书里「说话」那一节（短消息、像真人发微信）整节拿掉，
     人设 / 角色卡自己的文风说了算；日常模式照旧保留。"""
     index, ms = load(lang)
@@ -64,6 +74,9 @@ def render_handbook(lang: str, chat_rules: bool = True, life: bool = True) -> st
     if not life:
         old, new = _LIFE_OFF.get(lang, _LIFE_OFF["en"])
         index = index.replace(old, new)
+    if talk.strip():
+        mine = "".join(f"- {x.strip().lstrip('-').strip()}\n" for x in talk.strip().splitlines() if x.strip())
+        index = index.replace(_TALK_FACTORY.get(lang, _TALK_FACTORY["en"]), mine)
     return "\n\n".join([index, *(m.text for m in ms if m.mode == "always")])
 
 

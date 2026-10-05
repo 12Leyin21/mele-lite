@@ -306,7 +306,8 @@ final class LocalBrain: @unchecked Sendable {
                       LocalNotes.datesLines(host.store, companion: cidNow, conversation: conv, zh: zh)]
         }
         for line in notes where !line.isEmpty { req.context += "\n\n" + line }
-        req.context += "\n\n" + LocalNotes.anchor(contact.name, zh: zh, short: contact.mode == .online)      // 人设锚：离它开口最近的一行
+        req.context += "\n\n" + LocalNotes.anchor(contact.name, zh: zh,
+                                                 short: contact.mode == .online && (contact.talkRules ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)      // 人设锚：离它开口最近的一行
         var text = "", thinking = ""
         var cards: [[String: Any]] = []
         let started = Date()                            // 「思考了 x 秒」：从开口到说完（含中间调工具，10-05）
@@ -500,6 +501,7 @@ final class LocalBrain: @unchecked Sendable {
         var contact = Contact(id: c["id"] as? String ?? UUID().uuidString, name: p["name"] as? String ?? "TA",
                               persona: persona, mode: (s["long_mode"] as? Bool ?? false) ? .offline : .online, provider: provider)
         contact.offlineLife = s["offline_life"] as? Bool == true || s["long_mode"] as? Bool == true
+        contact.talkRules = s["talk_rules"] as? String
         let call = (p["call_user"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         contact.identities[0].userName = call.isEmpty ? (s["user_name"] as? String ?? "") : call
         contact.identities[0].relationship = relationshipText(s["relationship"] as? String ?? "", zh: zh)

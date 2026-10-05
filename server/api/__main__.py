@@ -19,7 +19,7 @@
 - NEWAPP_PUSH_RELAY：推送中转的地址（Mele Host，10-04）；Host 默认用官方那个，设成 off 关掉。
 - NEWAPP_LYRICS=1/0：一起听时去 lrclib 取歌词（只给 Lumi 看）；不设 = 正式版开、Host 关（10-05）。
 - NEWAPP_RERANK=1：加载精排模型 bge-reranker（约 2GB 内存）；不设 = 不加载（Host 默认不加载）。
-- NEWAPP_MUSICKIT_KEY_PATH / NEWAPP_MUSICKIT_KEY_ID / NEWAPP_MUSICKIT_TEAM_ID：Apple Music（音乐房间，09-30）；不配 = 歌卡和一起听都不可用，Lumi 会说明白。"""
+- NEWAPP_MUSICKIT_KEY_PATH / NEWAPP_MUSICKIT_KEY_ID / NEWAPP_MUSICKIT_TEAM_ID：Apple Music（音乐房间，09-30）；不配 = 找歌走 iTunes 公开搜索（10-05，Host 都是这样），没有相似歌手和「最近在听」。"""
 from __future__ import annotations
 
 import argparse
@@ -102,6 +102,11 @@ async def main(args) -> None:
                                 env("NEWAPP_MUSICKIT_KEY_ID"), env("NEWAPP_MUSICKIT_TEAM_ID"))
         from music.ears import Transport          # 耳朵（09-30）：在放、没听过的歌后台去听；演示模式不开
         deps.ears = None if args.demo else Transport()
+    else:                                                # 没钥匙（Mele Host 的用户都没有，10-05）：找歌走 iTunes 公开搜索
+        from music.itunes import ITunesMusic
+        deps.music = ITunesMusic()
+        from music.ears import Transport
+        deps.ears = None if args.demo else Transport()   # 试听片段一样拿得到；没有 Gemini 钥匙就只量数，不写听感
     from llm.tts import ElevenLabs, FakeTTS              # 声音（10-03）
     if args.demo:
         fake_tts = FakeTTS()
