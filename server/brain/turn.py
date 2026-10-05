@@ -27,7 +27,7 @@ from llm.errors import LLMError
 from llm.router import Route, call, make_adapter
 from llm.types import ChatRequest, ImagePart, Msg, ToolRound, Usage
 
-from . import archive, attachments as files, books, context_line, diary, drawer, far_dates, focus, hidden, ledger, lore, probe as sentinel, reactions, tarot, vision, voice, wallet
+from . import archive, attachments as files, books, context_line, diary, drawer, far_dates, focus, hidden, ledger, lore, mcp, probe as sentinel, reactions, tarot, vision, voice, wallet
 from .judge import LLMJudge
 from .bubbles import split_reply, typing_delay
 from .context import ContextParts, build_request, render_volatile, user_tag
@@ -407,20 +407,25 @@ async def run_turn(deps: Deps, scope: Scope | UUID, text: str, emit: Emit, *, re
                                      wake=bool(wake)):   # TA 那边：天气、在哪、日程、步数、快捷指令（09-28）；不是每轮都给
             before = [*before, side]
             state["side_at"], state["side_key"] = now.isoformat(), context_line.moment_key(items, now)
+    outside = mcp.Toolbox()                      # 用户自己接的 MCP 服务（10-05，Host）：无痕不给；连不上的这一轮跳过
+    if not scope.incognito and settings.mcp_servers:
+        outside = await _safe(mcp.toolbox(pool, getattr(deps.keys, "box", None), acc, settings.mcp_servers), mcp.Toolbox())
     parts = ContextParts(
-        tools=tool_specs(incognito=scope.incognito),
+        tools=tool_specs(incognito=scope.incognito) + outside.specs,
         base=render_base(persona, core, lang, monologue=mono_rules,
                          tone=tone_lines(lang, settings.warmth, settings.initiative, settings.humor)
                          + ([] if scope.incognito else voice.mode_lines(lang, settings.voice_mode)),
                          relationship=settings.relationship, lore=lore.always_block(lore_all, lang),
-                         chat_rules=not settings.long_mode),     # 长文模式：拿掉「说话」那一节（10-01 Tilia）
+                         chat_rules=not settings.long_mode,
+                         life=settings.offline_life or settings.long_mode),   # 线下生活关着：没有出门吃饭那两行（10-05）     # 长文模式：拿掉「说话」那一节（10-01 Tilia）
         ledger=ledger.render_ledger(await archive.get_ledger(pool, conv), state.get("voice_samples", []), lang,
                                    settings.user_name),
         history=hist,
         volatile=render_volatile(now=now, tz=settings.tz, lang=lang, recall=recall, sticky=sticky, lines=before),
         user_text=with_tools_note(tools_note, wake or text_for_model),
         # 人设锚（10-01 Tilia：怕脱离人设）：离最新对话最近的一行，每轮十几个字
-        tail="\n".join([*thinking_lines, TEXTS[lang]["anchor"].format(name=persona.name or "Lumi")]),
+        tail="\n".join([*thinking_lines, TEXTS[lang]["anchor"].format(name=persona.name or "Lumi")
+                         + ("" if settings.long_mode else TEXTS[lang]["short"])]),
         images=images,
     )
     req = build_request(parts, model=route.chat_model, thinking=mode == "native", user_tag=user_tag(acc),
@@ -430,7 +435,7 @@ async def run_turn(deps: Deps, scope: Scope | UUID, text: str, emit: Emit, *, re
 
     ctx = ToolContext(pool=pool, embedder=deps.embedder, user_id=comp, account_id=acc, now=now, lang=lang,
                       edit_ref=edit_ref, allowed=INCOGNITO_TOOLS if scope.incognito else None, tz=settings.tz,
-                      names=names, deps=deps)
+                      names=names, deps=deps, mcp=outside.route)
     started = time.monotonic()                   # 「思考了 x 秒」：从开口到说完（含中间调工具）
     try:
         out = await tool_loop(adapter, req, ctx, emit, lang)

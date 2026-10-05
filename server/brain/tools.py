@@ -67,6 +67,7 @@ class ToolContext:
     tz: str = "UTC"                  # 钟按 TA 那边的时间定
     names: tuple[str, ...] = ()      # 称呼（它的名字、TA 的名字）：翻记忆时不进关键词榜（memory/stopwords.py）
     deps: object = None              # 大脑的 Deps：饮食后台估、查营养要用（09-29）；测试里可以空
+    mcp: dict = field(default_factory=dict)   # 这一轮外面的工具：给模型的名字 → (服务, 原名)（10-05，brain/mcp.py）
 
     @property
     def people_owner(self) -> UUID:
@@ -1046,6 +1047,9 @@ def tool_specs(incognito: bool = False, extra: tuple[str, ...] = ()) -> list[Too
 
 
 async def run_tool(ctx: ToolContext, call: ToolCall) -> str:
+    if call.name in ctx.mcp:                     # 用户自己接的 MCP 服务（无痕时不会给）
+        from . import mcp
+        return await mcp.run(ctx, call.name, call.args or {})
     allowed = call.name in ctx.allowed if ctx.allowed is not None else call.name not in SIDE_TOOLS
     entry = _TOOLS.get(call.name) if allowed else None
     if entry is None:

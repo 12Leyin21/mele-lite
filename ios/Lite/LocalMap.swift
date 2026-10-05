@@ -82,7 +82,14 @@ enum LocalMap {
         return nil
     }
 
+    /// 线下生活（10-05 Tilia）：关着的 TA 没有地图和自己的一天（谈人机恋的有人不喜欢 AI 角色扮演，默认关）；进线下模式就当开着
+    static func lifeOn(_ s: LocalStore, _ cid: String) -> Bool {
+        let st = s.companion(cid)?["settings"] as? [String: Any] ?? [:]
+        return st["offline_life"] as? Bool == true || st["long_mode"] as? Bool == true
+    }
+
     static func snapshot(_ s: LocalStore, companion cid: String) -> [String: Any] {
+        guard lifeOn(s, cid) else { return ["off": true, "places": [[String: Any]](), "today": [[String: Any]](), "generating": false] }
         let pls = places(s, cid)
         let names = Dictionary(pls.map { ($0["id"] as? Int ?? 0, $0["name"] as? String ?? "") }, uniquingKeysWith: { a, _ in a })
         // 没到点的只给时间和地点（10-05 Tilia：它还没去，「在干嘛」到了那个点才出现，不然像提前剧透）
@@ -112,7 +119,7 @@ enum LocalMap {
             return zh ? "〔现在〕线下：你和 TA 一起在「\(name)」。今天原本的安排先放一边，照着眼前说。"
                       : "[Right now] In person: you and them are together at \"\(name)\". Set today's plan aside; stay in this scene."
         }
-        guard let n = now(s, cid) else { return "" }
+        guard lifeOn(s, cid), let n = now(s, cid) else { return "" }
         let place = places(s, cid).first { ($0["id"] as? Int) == (n["place_id"] as? Int) }
         let name = place?["name"] as? String ?? ""
         let doing = n["doing"] as? String ?? ""

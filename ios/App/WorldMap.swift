@@ -67,6 +67,7 @@ struct WorldSnapshot {
     var today: [WorldDay] = []
     var now: WorldDay?
     var generating = false
+    var off = false              // 这个 TA 的线下生活关着（10-05）
 
     init() {}
     init(_ d: [String: Any]) {
@@ -75,6 +76,7 @@ struct WorldSnapshot {
             WorldDay(time: x["time"] as? String ?? "", placeID: x["place_id"] as? Int ?? 0,
                      place: x["place"] as? String ?? "", doing: x["doing"] as? String ?? "", later: x["later"] as? Bool ?? false)
         }
+        off = d["off"] as? Bool ?? false
         today = (d["today"] as? [[String: Any]] ?? []).map(day)
         now = (d["now"] as? [String: Any]).map(day)
         generating = d["generating"] as? Bool ?? false
@@ -110,9 +112,9 @@ struct WorldMapView: View {
                     .buttonStyle(.plain)
                 }
                 people
-                mapCard
+                if world.off { lifeOffCard } else { mapCard }
                 if let error { Text(error).font(Typo.sans(Typo.Size.caption)).foregroundStyle(.red) }
-                if !world.today.isEmpty { dayList }
+                if !world.off && !world.today.isEmpty { dayList }
             }
             .padding(20)
         }
@@ -124,7 +126,7 @@ struct WorldMapView: View {
             // 起世界 / 排行程在后台跑：开着页面就隔几秒看一眼
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(4))
-                if worlds.values.contains(where: { $0.generating }) || (current.map { worlds[$0.id]?.places.isEmpty ?? true } ?? false) {
+                if worlds.values.contains(where: { $0.generating }) || (current.map { !(worlds[$0.id]?.off ?? false) && (worlds[$0.id]?.places.isEmpty ?? true) } ?? false) {
                     await loadAll()
                 }
             }
@@ -258,6 +260,28 @@ struct WorldMapView: View {
     }
 
     // MARK: 读写
+
+    /// 线下生活关着：没有地图和自己的一天，点一下就在 TA 设定里打开
+    private var lifeOffCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("\(current?.name ?? "TA") 的线下生活关着").font(Typo.sans(Typo.Size.body, .semibold)).foregroundStyle(theme.ink)
+            Text("关着的时候，TA 的日子就是和你聊天，没有地图，也不排自己的一天。打开以后，TA 会有自己的地方和行程。")
+                .font(Typo.sans(Typo.Size.callout)).foregroundStyle(theme.inkDim)
+            Button {
+                guard let c = current else { return }
+                Task {
+                    try? await model.api.send("PATCH", "companions/\(c.id.uuidString.lowercased())", json: ["settings": ["offline_life": true]])
+                    await load(c)
+                }
+            } label: {
+                Text("打开线下生活").font(Typo.sans(Typo.Size.callout, .medium)).foregroundStyle(theme.accentDeep)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .cardSurface()
+    }
 
     private func loadAll() async {
         for c in model.companions { await load(c) }

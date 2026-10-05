@@ -90,6 +90,8 @@ class Settings:
     voice_mode: str = "sometimes"       # 语音条（10-03）：off 不发 / sometimes 偶尔 / often 常常
     voice_id: str = ""                  # 它的嗓子（ElevenLabs voice_id）；空 = 用出厂那把（brain/voice.PRESETS 第一把）
     voice_name: str = ""                # 嗓子的名字（设置页显示）
+    mcp_servers: list[str] = field(default_factory=list)   # 这个 TA 能用的 MCP 服务（10-05，Host；brain/mcp.py）
+    offline_life: bool = False          # 线下生活（10-05）：关着 = 说明书里没有「你有自己的一天」；Lite 本机还管地图 / 它的一天
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -117,6 +119,9 @@ class Settings:
             raise ValueError("max_bubbles must be >= 1 or None")
         if self.memory_length is not None and self.memory_length < 1:
             raise ValueError("memory_length must be >= 1 or None")
+        if not isinstance(self.mcp_servers, list) or len(self.mcp_servers) > 20:
+            raise ValueError("mcp_servers must be a list of at most 20 ids")
+        self.mcp_servers = [str(x) for x in self.mcp_servers]
         self.user_name = (self.user_name or "").strip()
         if len(self.user_name) > 20:
             raise ValueError("user_name must be at most 20 characters")

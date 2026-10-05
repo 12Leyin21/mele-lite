@@ -80,4 +80,14 @@ import Testing
         let s = Prompt.build(input(sampleContact(), lang: .en)).system
         #expect(s.contains("You have your own feelings") && s.contains("You're online") && s.contains("You are Lumi"))
     }
+
+    @Test func offlineLifeSwitchesTheOwnDayLine() {
+        var c = sampleContact()
+        func sys() -> String { Prompt.build(input(c)).system }
+        #expect(sys().contains("吃饭、出门") && !sys().contains("{life}"))          // 老数据（nil）照旧有自己的一天
+        c.offlineLife = false
+        #expect(sys().contains("你的日子就是和对方说话的这些时候") && !sys().contains("出门"))
+        c.mode = ChatMode.offline
+        #expect(!sys().contains("你的日子就是"))                                       // 线下那段不受影响
+    }
 }

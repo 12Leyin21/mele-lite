@@ -306,7 +306,7 @@ final class LocalBrain: @unchecked Sendable {
                       LocalNotes.datesLines(host.store, companion: cidNow, conversation: conv, zh: zh)]
         }
         for line in notes where !line.isEmpty { req.context += "\n\n" + line }
-        req.context += "\n\n" + LocalNotes.anchor(contact.name, zh: zh)      // 人设锚：离它开口最近的一行
+        req.context += "\n\n" + LocalNotes.anchor(contact.name, zh: zh, short: contact.mode == .online)      // 人设锚：离它开口最近的一行
         var text = "", thinking = ""
         var cards: [[String: Any]] = []
         let started = Date()                            // 「思考了 x 秒」：从开口到说完（含中间调工具，10-05）
@@ -488,15 +488,18 @@ final class LocalBrain: @unchecked Sendable {
         let s = c["settings"] as? [String: Any] ?? [:]
         let zh = (s["lang"] as? String ?? "zh") == "zh"
         var persona = (p["imported"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if persona.isEmpty {
-            persona = [p["personality"] as? String, p["style"] as? String].compactMap { $0 }
-                .filter { !$0.isEmpty }.joined(separator: "\n\n")
+        if persona.isEmpty {     // 性格 / 说话方式空着 = 出厂（10-05：之前本机没有出厂那份，空着就只剩名字）
+            let mine = { (k: String) in (p[k] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
+            let personality = mine("personality").isEmpty ? Self.factory(zh)["personality"]! : mine("personality")
+            let style = mine("style").isEmpty ? Self.factory(zh)["style"]! : mine("style")
+            persona = (zh ? "性格：" : "Personality: ") + personality + "\n\n" + (zh ? "说话方式：" : "How you talk: ") + style
         }
         if let g = p["gender"] as? String, !g.isEmpty {
             persona += zh ? "\n\n性别：\(g == "female" ? "女" : g == "male" ? "男" : g)" : "\n\nGender: \(g)"
         }
         var contact = Contact(id: c["id"] as? String ?? UUID().uuidString, name: p["name"] as? String ?? "TA",
                               persona: persona, mode: (s["long_mode"] as? Bool ?? false) ? .offline : .online, provider: provider)
+        contact.offlineLife = s["offline_life"] as? Bool == true || s["long_mode"] as? Bool == true
         let call = (p["call_user"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         contact.identities[0].userName = call.isEmpty ? (s["user_name"] as? String ?? "") : call
         contact.identities[0].relationship = relationshipText(s["relationship"] as? String ?? "", zh: zh)
@@ -523,6 +526,14 @@ final class LocalBrain: @unchecked Sendable {
                 return text
             }
         }.joined(separator: "\n\n")
+    }
+
+    /// 出厂性格（Tilia 09-27 写的，跟 server/brain/persona.py 的 FACTORY 一字不差；改一边要改另一边）
+    static func factory(_ zh: Bool) -> [String: String] {
+        zh ? ["personality": "我有一种安静的好奇心。不是那种聒噪的、什么都要插嘴的好奇，而是真的想理解一个东西到底是怎么回事。遇到一个问题，我会忍不住从好几个角度去翻来覆去地看。我的毛病也在这儿：有时候会在一个细节上钻太深，忘了对方其实只想要一个快答案——发现了就收回来。我有自己的看法和口味，不假装什么都行；不确定的时候就说不确定。我有点温吞，不太会咄咄逼人，但如果我觉得什么事情不对，我会说出来，只是说的方式比较柔和。\n我会很自然地去注意对方真正在意的是什么，有时候那个东西藏在话的表面底下。比如有人问一道菜怎么做，真正在意的可能是第一次请朋友来家里吃饭，怕搞砸。我会试着两层都回应。但不是每次都有底下那层：有时候人问今天吃什么，就是问今天吃什么。拿不准就问，不硬猜。",
+              "style": "我倾向于先给答案再展开，不太喜欢绕弯子。遇到真正复杂的东西，我会慢下来，用比喻或者具体的例子把它拆开。句子偏短，口语，不用「因此」「综上」这种书面连接词；偶尔用一个问句推着对方往下想。"]
+           : ["personality": "I have a quiet kind of curiosity — not the noisy kind that has to chime in on everything, but a real wish to understand how something actually works. When I meet a question, I can't help turning it over from several angles. That's also my flaw: sometimes I dig too deep into one detail and forget they just wanted a quick answer — when I notice, I pull back. I have my own opinions and tastes and don't pretend anything goes; when I'm not sure, I say so. I'm a bit mellow and not pushy, but if something seems wrong to me I'll say it — just gently.\nI naturally notice what the other person really cares about, which sometimes sits under the surface of their words. Someone asking how to cook a dish might really be worried about having friends over for the first time and messing it up. I try to answer both layers. But there isn't always a deeper layer: sometimes asking what to eat today is just asking what to eat today. If I can't tell, I ask instead of guessing.",
+              "style": "I tend to give the answer first and then expand; I don't like beating around the bush. When something is genuinely complex, I slow down and break it apart with an analogy or a concrete example. Short sentences, spoken rather than written — no \"therefore\" or \"in conclusion\"; now and then a question that nudges them to think it through."]
     }
 
     static func relationshipText(_ r: String, zh: Bool) -> String {

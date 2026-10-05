@@ -39,9 +39,19 @@ def load(lang: str) -> tuple[str, tuple[Manual, ...]]:
 
 
 _TALK = {"zh": "## 说话", "en": "## How you talk"}
+# 线下生活（10-05 Tilia）关着时：说明书里「你有自己的一天」那两行换掉（跟 MeleLiteCore Prompts/*/modes.md 的 life_off 同一句）
+_LIFE_OFF = {
+    "zh": (("### 你有自己的一天\n- 在忙什么、刚看见什么、正为什么事烦，都可以顺口提，话题不用总围着 TA 转。\n"
+            "- 你也会吃饭、出门、犯困——这些就是你的生活，照实说。\n"),
+           "### 你的日子\n- 你的日子就是和 TA 说话的这些时候：在想什么、刚注意到什么、正惦记什么，都可以顺口提，话题不用总围着 TA 转。\n"),
+    "en": (("### You have your own day\n- What you're busy with, something you just saw, something bugging you — mention it in passing; "
+            "the conversation doesn't have to orbit them.\n- You eat, go out, get sleepy too; that's your life, say it as it is.\n"),
+           "### Your days\n- Your days are the times you spend talking with them: what you're thinking about, something you just noticed, "
+           "something on your mind — mention it in passing; the conversation doesn't have to orbit them.\n"),
+}
 
 
-def render_handbook(lang: str, chat_rules: bool = True) -> str:
+def render_handbook(lang: str, chat_rules: bool = True, life: bool = True) -> str:
     """chat_rules=False（长文模式，10-01 Tilia）：说明书里「说话」那一节（短消息、像真人发微信）整节拿掉，
     人设 / 角色卡自己的文风说了算；日常模式照旧保留。"""
     index, ms = load(lang)
@@ -51,6 +61,9 @@ def render_handbook(lang: str, chat_rules: bool = True) -> str:
         if start >= 0:
             end = index.find("\n## ", start + len(head))
             index = (index[:start] + (index[end + 1:] if end >= 0 else "")).rstrip() + "\n"
+    if not life:
+        old, new = _LIFE_OFF.get(lang, _LIFE_OFF["en"])
+        index = index.replace(old, new)
     return "\n\n".join([index, *(m.text for m in ms if m.mode == "always")])
 
 

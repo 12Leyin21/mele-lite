@@ -415,6 +415,12 @@ struct CompanionSettingsView: View {
                     .font(Typo.sans(Typo.Size.body))
             }
             relationshipRows
+            if Lite.on {         // 线下生活（10-05 Tilia：谈人机恋的有人不喜欢 AI 角色扮演，默认关；进线下模式自动打开）
+                Toggle(isOn: store.s("offline_life", false)) {
+                    row("线下生活", Lite.local ? "开着：TA 有自己的一天，会聊自己在哪、在干嘛，有地图。关着：TA 的日子就是和你聊天。进线下模式时会自动打开"
+                        : "开着：TA 有自己的一天，会聊自己吃饭、出门这些事。关着：TA 的日子就是和你聊天。进线下模式时会自动打开")
+                }
+            }
         } header: { GlassHeader(String(localized: "关于 \(genderWord)")) }
     }
 
@@ -525,7 +531,7 @@ struct CompanionSettingsView: View {
     private var memory: some View {
         Tile {
             // 接 MCP（10-04）：Lite 能接用户自己部署的记忆库；接上了「联想」就亮
-            if Lite.local { MemoryLinkRows(store: store) }
+            if Lite.on { MemoryLinkRows(store: store, hosted: !Lite.local) }
             let linked = Lite.local && store.settings["memory_server"] is String
             Group {
                 if linked { recallPicker } else { recallPicker.needsHost(note: false) }

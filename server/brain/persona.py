@@ -183,7 +183,8 @@ def relationship_text(lang: str, rel: str = "") -> str:
 
 
 def render_base(persona: Persona, core: list[str], lang: str = "zh", monologue: str = "",
-                tone: list[str] | None = None, relationship: str = "", lore: str = "", chat_rules: bool = True) -> str:
+                tone: list[str] | None = None, relationship: str = "", lore: str = "", chat_rules: bool = True,
+                life: bool = True) -> str:
     """壹层全文。core 按钉住的先后排（旧的在前），这样新钉一条只动尾巴。
     monologue = 手写独白的规矩和范文（只有这个用户用手写独白时才有），放在说明书后面，走缓存。
     tone = 三个滑块对应的几句（tone_lines），接在性格后面。
@@ -195,7 +196,7 @@ def render_base(persona: Persona, core: list[str], lang: str = "zh", monologue: 
     if not chat_rules:                                   # 线下（长文）：不写死「在手机上」
         base = base.replace(*OFFLINE_OPENING[lang])
     parts = [base.replace("{relationship}", relationship_text(lang, relationship)),
-             render_handbook(lang, chat_rules)]
+             render_handbook(lang, chat_rules, life)]
     if monologue.strip():
         parts.append(monologue.strip())
     # 用户设了性别就用它自己的口吻写一句（09-28 Tilia：它老说自己没有脸没有头发，对爱角色扮演的用户不好；

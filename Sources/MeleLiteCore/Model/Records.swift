@@ -43,6 +43,8 @@ public struct Contact: Codable, Identifiable, Equatable, Sendable {
     public var mode: ChatMode
     public var provider: ProviderConfig
     public var identities: [Identity]
+    /// 线下生活（10-05）：开着 = 它有自己的一天（吃饭、出门……）；关着 = 它的日子就是跟你聊天。nil = 开（老数据）
+    public var offlineLife: Bool?
 
     public init(id: String = UUID().uuidString, name: String, avatarFile: String? = nil, persona: String,
                 mode: ChatMode = .online, provider: ProviderConfig, userName: String = "") {

@@ -19,7 +19,7 @@ struct MeView: View {
                 ProfileCard()
                 KeychainCard()
                 if Lite.on { HostCard() }
-                if Lite.local { MCPServersCard() }
+                if Lite.on { MCPServersCard() }       // 连着 Host 也能接（10-05，服务器 brain/mcp.py）
                 if Lite.local { UsageCard() }       // 用量页只有手机里的小管家有；Host 上以后再加
                 ContextCard()
                 AppearanceCard()

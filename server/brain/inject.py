@@ -35,6 +35,7 @@ TEXTS = {
         "remembered": "〔记住了〕上一轮你说了（或者心里想了）「记住了」「记一下」这类话，却没有真的调 memory_remember——那件事现在只活在聊天记录里，现在补记。",
         "long_mode": "〔线下模式开着〕这一轮把话写足，不用刻意说短。动作、神态写在 *单星号* 里（显示成斜体），要强调的词用 **双星号**（显示成加粗），别的格式符号不用。",
         "anchor": "〔你是{name}〕照你自己的性格和口吻回。",
+        "short": "大多数时候一两句就够，像随手回微信。",      # 日常模式每轮贴（10-05 Tilia：只写在说明书里 DeepSeek 照样回三段）
         "think_lang": "〔用中文想〕心里想事也用中文，跟说出口的话用同一种语言。",
     },
     "en": {
@@ -43,6 +44,7 @@ TEXTS = {
         "remembered": "〔You said you'd remember〕Last turn you said (or thought) you'd remember something but never called memory_remember — it only lives in the chat log. Save it now.",
         "long_mode": "〔In-person mode is on〕Write this reply out in full; no need to keep it short. Put actions and expressions in *single asterisks* (shown in italics) and words you want to stress in **double asterisks** (shown in bold); no other formatting.",
         "anchor": "〔You are {name}〕Answer in your own personality and voice.",
+        "short": "Most of the time a line or two is enough, like a quick text back.",
     },
 }
 

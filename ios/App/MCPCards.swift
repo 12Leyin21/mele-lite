@@ -33,9 +33,9 @@ enum MemoryLink {
 
     @discardableResult
     static func refresh(_ api: APIClient) async -> [MCPServerDTO] {
-        guard Lite.local else { return [] }
+        guard Lite.on else { return [] }
         let list: [MCPServerDTO] = (try? await api.call("GET", "mcp/servers")) ?? []
-        UserDefaults.standard.set(list.contains { $0.memory }, forKey: key)
+        UserDefaults.standard.set(Lite.local && list.contains { $0.memory }, forKey: key)   // 记忆库软件 / 星图只在本机
         return list
     }
 }
@@ -61,7 +61,7 @@ struct MCPServersCard: View {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {
                                 Text(s.name).font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.ink)
-                                if s.memory {
+                                if s.memory && Lite.local {
                                     Text("记忆库").font(Typo.sans(Typo.Size.caption, .medium)).foregroundStyle(theme.accentDeep)
                                         .padding(.horizontal, 6).padding(.vertical, 1)
                                         .background(Capsule().fill(theme.accentSoft.opacity(0.5)))
@@ -88,7 +88,8 @@ struct MCPServersCard: View {
                 Label("接一个服务", systemImage: "plus").font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.accentDeep)
             }
             .buttonStyle(.plain)
-            Text("接上以后，在 TA 的设定里勾上，TA 就能用上面的工具。接的是记忆库的话，TA 每句话都会先去想一下。")
+            Text(Lite.local ? "接上以后，在 TA 的设定里勾上，TA 就能用上面的工具。接的是记忆库的话，TA 每句话都会先去想一下。"
+                 : "接上以后，在 TA 的设定里勾上，TA 就能用上面的工具。连着 Mele Host 时，是你的 Host 去连这个地址，所以要填网上能访问到的网址。")
                 .font(Typo.sans(Typo.Size.caption)).foregroundStyle(theme.inkFaint)
         }
         .padding(16)
@@ -166,7 +167,8 @@ struct AddMCPServerView: View {
                     SecureField("钥匙", text: $token)
                         .textInputAutocapitalization(.never).autocorrectionDisabled()
                 } footer: {
-                    Text("就是你部署记忆库时的钥匙（MELE_MEMORY_TOKEN）；没自己设过的话，记忆库第一次启动时打在日志里，也存在 data 文件夹的 token 文件里。钥匙只存在这台手机的钥匙串里。")
+                    Text(Lite.local ? "就是你部署记忆库时的钥匙（MELE_MEMORY_TOKEN）；没自己设过的话，记忆库第一次启动时打在日志里，也存在 data 文件夹的 token 文件里。钥匙只存在这台手机的钥匙串里。"
+                         : "服务要钥匙的话填这里（不要就空着）。钥匙加密存在你自己的 Host 上，App 里看不到原文。")
                 }
                 if let error {
                     Text(error).font(Typo.sans(Typo.Size.callout)).foregroundStyle(.red)
@@ -375,24 +377,30 @@ struct StarmapWidget: View {
 struct MemoryLinkRows: View {
     @EnvironmentObject private var theme: AppTheme
     @ObservedObject var store: CompanionSettingsStore
+    /// 连着 Host（10-05）：记忆库那套（绑定、人物卡 / 远事归谁）不给，Host 自己有记忆；每个服务都只当工具勾
+    var hosted = false
     @State private var servers: [MCPServerDTO] = []
     @State private var change: (body: [String: Any], question: String)?
     @State private var result: String?
 
-    private var memoryServers: [MCPServerDTO] { servers.filter(\.memory) }
-    private var otherServers: [MCPServerDTO] { servers.filter { !$0.memory } }
+    private var memoryServers: [MCPServerDTO] { hosted ? [] : servers.filter(\.memory) }
+    private var otherServers: [MCPServerDTO] { hosted ? servers : servers.filter { !$0.memory } }
     private var current: String? { store.settings["memory_server"] as? String }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            RowPicker(selection: Binding(get: { current ?? "" }, set: { pick($0) })) {
-                Text("不接").tag("")
-                ForEach(memoryServers) { Text($0.name).tag($0.id) }
-            } label: { row("记忆库", memoryServers.isEmpty ? String(localized: "先去 Me →「MCP 服务」接一个") : String(localized: "TA 每句话先去这里想一下")) }
-            .disabled(memoryServers.isEmpty && current == nil)
-            if current != nil {
-                owner("memory_people", String(localized: "人物卡存在"), String(localized: "人物卡"))
-                owner("memory_dates", String(localized: "远事存在"), String(localized: "远事"))
+            if !hosted {
+                RowPicker(selection: Binding(get: { current ?? "" }, set: { pick($0) })) {
+                    Text("不接").tag("")
+                    ForEach(memoryServers) { Text($0.name).tag($0.id) }
+                } label: { row("记忆库", memoryServers.isEmpty ? String(localized: "先去 Me →「MCP 服务」接一个") : String(localized: "TA 每句话先去这里想一下")) }
+                .disabled(memoryServers.isEmpty && current == nil)
+                if current != nil {
+                    owner("memory_people", String(localized: "人物卡存在"), String(localized: "人物卡"))
+                    owner("memory_dates", String(localized: "远事存在"), String(localized: "远事"))
+                }
+            } else if servers.isEmpty {
+                note(String(localized: "先去 Me →「MCP 服务」接一个，接上的工具在这里勾给 TA"))
             }
             if let result { note(result) }
             if !otherServers.isEmpty {

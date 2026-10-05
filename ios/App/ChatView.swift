@@ -79,6 +79,19 @@ struct ChatView: View {
     private var pendingPeek: ChatItem? {
         chat.items.last { if case .card(let k) = $0.kind { k == "peek:ask" } else { false } }
     }
+    /// 它提议陪你专注（10-05 Tilia：跟查手机一样弹在屏幕中间，不往聊天里挂卡片）：最近一张、十分钟内、还没答过的
+    @AppStorage("focusOffersAnswered") private var focusAnsweredRaw = ""
+    private var pendingFocus: ChatItem? {
+        let answered = Set(focusAnsweredRaw.split(separator: ",").map(String.init))
+        guard let f = chat.items.last(where: { if case .card(let k) = $0.kind { k == "focus" } else { false } }),
+              Date().timeIntervalSince(f.at) < 600, !answered.contains(String(f.id)) else { return nil }
+        return f
+    }
+    private func answerFocus(_ item: ChatItem, start: Bool) {
+        let kept = focusAnsweredRaw.split(separator: ",").suffix(50).map(String.init)
+        focusAnsweredRaw = (kept + [String(item.id)]).joined(separator: ",")
+        if start { NotificationCenter.default.post(name: .lumiOpenFocus, object: nil, userInfo: FocusPrefill.parse(item.text)) }
+    }
     /// 长按浮层正对着哪条（Instagram 那种：表情条在上、气泡在中、菜单在下）
     @State private var actionItem: ChatItem?
     @State private var actionPopped = false
@@ -181,6 +194,13 @@ struct ChatView: View {
             }
         }
         .animation(.easeOut(duration: 0.25), value: pendingPeek?.id)
+        .overlay {
+            if let f = pendingFocus, pendingPeek == nil, !isMoment {
+                FocusPrompt(companionName: companionName, offer: f.text, avatar: avatars.ai) { start in answerFocus(f, start: start) }
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeOut(duration: 0.25), value: pendingFocus?.id)
         // 系统的东西（⋯ 菜单、弹出页、状态栏）跟着聊天页的深浅走，不跟手机的（Tilia 09-28：深色下菜单还是浅色）
         .preferredColorScheme(skin.isDark ? .dark : .light)
         .onPreferenceChange(CoachFrameKey.self) { coachFrames = $0 }
@@ -626,7 +646,8 @@ struct ChatView: View {
 
     private func pushLongMode(_ on: Bool) async {
         do {
-            try await chat.api.send("PATCH", companionPath, json: ["settings": ["long_mode": on]])
+            // 进线下顺手把「线下生活」打开（10-05 Tilia）；出来不关，那是 TA 设定里的事
+            try await chat.api.send("PATCH", companionPath, json: ["settings": on && Lite.on ? ["long_mode": true, "offline_life": true] : ["long_mode": on]])
         } catch {
             longModeOn = !on
             chat.errorText = "长文模式没切过去：\(error.localizedDescription)"
@@ -888,15 +909,16 @@ struct ChatView: View {
             } else if case .card(let kind) = item.kind {
                 // 动作卡片：左右离屏幕一样远（不走气泡那套远侧 26pt）；有正文的点开是整张
                 let chip = ActionCardChip(kind: kind, text: item.text, at: item.at, skin: skin)
-                if kind == "focus" && !selectable {
-                    // 它提议专注（offer_focus）：点卡片打开专注页，多久、在忙什么预填好（卡上写的是「复习期末 · 120 分钟」）
+                if kind == "focus" {
+                    // 专注提议：弹窗问过了，聊天里只留一行灰字；点一下还能打开专注页
                     Button { NotificationCenter.default.post(name: .lumiOpenFocus, object: nil, userInfo: FocusPrefill.parse(item.text)) } label: {
-                        HStack(spacing: 8) {
-                            chip
-                            Text("开始专注").font(Typo.sans(skin.size(Typo.Size.callout), .semibold)).foregroundStyle(theme.accentDeep)
+                        HStack(spacing: 5) {
+                            Image(systemName: "timer").font(Typo.icon(10))
+                            Text("\(companionName)想陪你专注 · \(item.text)").font(Typo.sans(skin.size(Typo.Size.caption)))
                         }
+                        .foregroundStyle(skin.inkFaint).frame(maxWidth: .infinity).padding(.vertical, 4)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.plain).disabled(selectable)
                 } else if !chip.parts.body.isEmpty && !selectable {
                     Button {
                         withAnimation(.easeOut(duration: 0.22)) {
@@ -1717,15 +1739,17 @@ struct DeedsRow: View {
             Button {
                 withAnimation(.smooth(duration: 0.25)) { open.toggle() }
             } label: {
-                HStack(spacing: 6) {
+                // 跟思考链那行一个排法（10-05 Tilia）：小箭头在最左、收着朝右点开朝下，再图标、再字
+                HStack(spacing: 5) {
+                    Image(systemName: "chevron.down")
+                        .font(Typo.icon(skin.size(9), .semibold))
+                        .rotationEffect(.degrees(open ? 0 : -90))
                     Image(systemName: deeds.count == 1 ? ActionCardChip.icon(deeds[0].kind) : "checklist")
-                        .font(Typo.icon(12))
-                    Text(title).font(Typo.sans(skin.size(Typo.Size.caption), .medium)).lineLimit(1)
-                    Image(systemName: "chevron.right")
-                        .font(Typo.icon(10, .semibold))
-                        .rotationEffect(.degrees(open ? 90 : 0))
+                        .font(Typo.icon(skin.size(10.5)))
+                    Text(title).font(Typo.sans(skin.size(Typo.Size.callout))).lineLimit(1)
                 }
                 .foregroundStyle(skin.inkDim)
+                .padding(.vertical, 2)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

@@ -8,7 +8,7 @@ Mele 是我从零开始写的。一路上，很多想法来自大家无私公开
 如果你在名单上但不想被提到，或者你觉得你应该在名单上，请私信告知我，会立马改正：
 X：Tilia @M51_5194　小红书：Mele（94587369760）
 
-**也特别感谢无花果（赚钱养机 @Cheneyc51436310），她无私公开分享的作品和想法，启发了我开始做 Mele。**
+**也特别感谢无花果（赚钱养机 @Cheneyc51436310），她帮助了我很多，也是她无私公开分享作品和想法，启发我开始做 Mele。**
 
 ## 想法从哪里来
 
@@ -65,7 +65,7 @@ For everything listed below, I borrowed only the idea: all code, writing and ima
 If you're on this list and would rather not be, or you think you should be on it, please message me and I'll correct it right away:
 X: Tilia @M51_5194 · Xiaohongshu (RED): Mele (94587369760)
 
-**Special thanks also to 无花果 (赚钱养机 @Cheneyc51436310), whose generously shared work and ideas inspired me to start Mele.**
+**Special thanks also to 无花果 (赚钱养机 @Cheneyc51436310), who has helped me a lot — and it was her generously shared work and ideas that inspired me to start Mele.**
 
 ## Where the ideas came from
 

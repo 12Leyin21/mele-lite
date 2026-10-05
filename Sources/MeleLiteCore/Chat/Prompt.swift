@@ -49,7 +49,10 @@ public enum Prompt {
         if !me.aboutMe.isEmpty { who.append((zh ? "关于 TA：" : "About them: ") + me.aboutMe) }
         if !me.relationship.isEmpty { who.append((zh ? "你们的关系：" : "Your relationship: ") + me.relationship) }
         if !who.isEmpty { parts.append((zh ? "## 对面这个人\n" : "## The person you're talking to\n") + who.joined(separator: "\n")) }
-        parts.append(Resources.mode(c.mode == .online ? "online" : "offline", i.lang))
+        // 线上那段的「你有自己的一天」看线下生活开关（10-05 Tilia：谈人机恋的有人不喜欢 AI 角色扮演，默认关）
+        parts.append(c.mode == .online
+            ? Resources.mode("online", i.lang).replacingOccurrences(of: "{life}", with: Resources.mode((c.offlineLife ?? true) ? "life_on" : "life_off", i.lang))
+            : Resources.mode("offline", i.lang))
         let caps = i.stickers.map(\.caption).filter { !$0.isEmpty }
         if !caps.isEmpty { parts.append((zh ? "## 你的表情包\n" : "## Your stickers\n") + caps.map { "- " + $0 }.joined(separator: "\n")) }
         return parts.joined(separator: "\n\n")

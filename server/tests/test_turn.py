@@ -152,7 +152,7 @@ async def test_monologue_mode_cuts_the_monologue_out(pool, user_a):
     ev = await turn(d, user_a, "你还记得我对什么过敏吗")
     req = m.requests[0]
     assert req.thinking is False and "## 独白" in req.system[0].text                    # 规矩常驻壹层，原生思考关掉
-    assert req.messages[-1].text.endswith("收尾，再换成对TA说话。\n〔你是Lumi〕照你自己的性格和口吻回。")   # 短提醒 + 人设锚压在最后
+    assert req.messages[-1].text.endswith("收尾，再换成对TA说话。\n〔你是Lumi〕照你自己的性格和口吻回。大多数时候一两句就够，像随手回微信。")   # 短提醒 + 人设锚（日常模式带「一两句」）压在最后
     assert of(ev, "thinking")[0]["text"] == "她记着芒果。\n\n查到了，放心了。"
     assert [e["text"] for e in of(ev, "bubble")] == ["记得呢，芒果碰不得。"]
     saved = (await archive.unrolled(pool, user_a))[-1]

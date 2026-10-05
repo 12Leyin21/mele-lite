@@ -42,3 +42,12 @@ def test_long_mode_drops_the_talk_section_only():
         full, long_ = manuals.render_handbook(lang), manuals.render_handbook(lang, chat_rules=False)
         assert head in full and head not in long_
         assert nxt in long_ and "## 手册 · memory" in manuals.render_handbook("zh", chat_rules=False)
+
+
+def test_offline_life_off_swaps_the_own_day_lines():
+    """线下生活（10-05）：关着没有出门吃饭那两行，换成「你的日子就是和 TA 说话的这些时候」；说话那节多了「一两句就够」"""
+    from brain.manuals import render_handbook
+    on, off = render_handbook("zh"), render_handbook("zh", life=False)
+    assert "吃饭、出门" in on and "吃饭、出门" not in off and "你的日子就是和 TA 说话的这些时候" in off
+    assert "大多数时候回一两句就够" in on and "大多数时候回一两句就够" in off
+    assert "go out" not in render_handbook("en", life=False)

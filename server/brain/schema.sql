@@ -823,3 +823,14 @@ CREATE TABLE IF NOT EXISTS milestones (
   created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS milestones_account_idx ON milestones (account_id, created_at);
+
+CREATE TABLE IF NOT EXISTS mcp_servers (          -- 用户自己的 MCP 服务（10-05，Host 才有；brain/mcp.py）：钥匙用主密钥加密
+  id         UUID        PRIMARY KEY,
+  account_id UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  name       TEXT        NOT NULL,
+  url        TEXT        NOT NULL,
+  slug       TEXT        NOT NULL,
+  secret     BYTEA,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS mcp_servers_account_idx ON mcp_servers (account_id);

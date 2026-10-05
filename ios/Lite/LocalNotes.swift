@@ -131,9 +131,11 @@ enum LocalNotes {
     }
 
     /// 人设锚（服务器 10-01：怕脱离人设）：每轮离它开口最近的一行
-    static func anchor(_ name: String, zh: Bool) -> String {
+    /// short：日常（线上）模式再贴一句「一两句就够」（10-05 Tilia，照服务器 inject.TEXTS["short"]）
+    static func anchor(_ name: String, zh: Bool, short: Bool = false) -> String {
         let n = name.isEmpty ? "Lumi" : name
-        return zh ? "〔你是\(n)〕照你自己的性格和口吻回。" : "〔You are \(n)〕Answer in your own personality and voice."
+        let tail = short ? (zh ? "大多数时候一两句就够，像随手回微信。" : "Most of the time a line or two is enough, like a quick text back.") : ""
+        return (zh ? "〔你是\(n)〕照你自己的性格和口吻回。" : "〔You are \(n)〕Answer in your own personality and voice.") + tail
     }
 
     /// 它自己用工具记的（钱包 / 饮食）：不用再告诉它

@@ -167,3 +167,60 @@ enum PeekRoomName {
         }
     }
 }
+
+/// 它提议陪你专注（10-05 Tilia：跟查手机一样弹在中间，不往聊天里挂卡）：offer = 「复习期末 · 120 分钟」
+struct FocusPrompt: View {
+    @EnvironmentObject private var theme: AppTheme
+    let companionName: String
+    let offer: String
+    let avatar: UIImage?
+    let onAnswer: (_ start: Bool) -> Void
+    @State private var shown = false
+
+    var body: some View {
+        ZStack {
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+                .overlay(Color.black.opacity(0.18).ignoresSafeArea())
+                .onTapGesture { onAnswer(false) }
+            VStack(spacing: 14) {
+                Group {
+                    if let avatar { Image(uiImage: avatar).resizable().scaledToFill() }
+                    else {
+                        LinearGradient(colors: [theme.accentSoft, theme.accent], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            .overlay(Text(String(companionName.prefix(1))).font(Typo.sans(22, .semibold)).foregroundStyle(.white))
+                    }
+                }
+                .frame(width: 58, height: 58).clipShape(Circle())
+                Text("\(companionName)想陪你专注一会儿")
+                    .font(Typo.sans(Typo.Size.headline, .semibold)).foregroundStyle(theme.ink)
+                if !offer.isEmpty {
+                    Text(offer).font(Typo.sans(Typo.Size.callout)).foregroundStyle(theme.inkDim)
+                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 10) {
+                    Button { onAnswer(false) } label: {
+                        Text("先不了").font(Typo.sans(Typo.Size.callout, .semibold)).foregroundStyle(theme.inkDim)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(Capsule().fill(Color.white.opacity(0.75)))
+                    }
+                    Button { onAnswer(true) } label: {
+                        Text("开始专注").font(Typo.sans(Typo.Size.callout, .semibold)).foregroundStyle(.white)
+                            .frame(maxWidth: .infinity).padding(.vertical, 12)
+                            .background(Capsule().fill(theme.accentDeep))
+                    }
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
+            .padding(22)
+            .frame(maxWidth: 340)
+            .background(RoundedRectangle(cornerRadius: 28, style: .continuous).fill(Color.white.opacity(0.92)))
+            .shadow(color: .black.opacity(0.18), radius: 30, y: 10)
+            .padding(.horizontal, 24)
+            .scaleEffect(shown ? 1 : 0.92)
+            .opacity(shown ? 1 : 0)
+        }
+        .environment(\.colorScheme, .light)
+        .onAppear { withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) { shown = true } }
+    }
+}

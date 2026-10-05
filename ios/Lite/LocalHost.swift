@@ -193,7 +193,7 @@ final class LocalHost: @unchecked Sendable {
         "ledger_same_as_chat": false, "sentinels": ["thinking_style": true, "tool_reminder": true, "remembered": true],
         "tool_reminder_every": 5, "thinking_style_text": "", "injections": [Any](), "patrol_level": "mid",
         "heartbeat_on": true, "morning_on": true, "sleep_from": "00:00", "sleep_to": "08:00", "patrol_overrides": [String: Any](),
-        "relationship": "", "cache_keepalive": false, "diary_on": true, "diary_chars": 600, "voice_mode": "sometimes",
+        "relationship": "", "cache_keepalive": false, "diary_on": true, "offline_life": false, "diary_chars": 600, "voice_mode": "sometimes",
         "voice_id": "", "voice_name": "",
     ]
 
@@ -437,7 +437,7 @@ final class LocalHost: @unchecked Sendable {
     private func messages(_ conv: String, _ q: [String: String]) -> LocalResponse {
         guard let comp = companion(ofConversation: conv) else { return .error(404, String(localized: "没有这个窗口")) }
         // 它的一天：今天第一次进这个人的聊天，后台排今天的行程（没世界先起世界）
-        if let cid = comp["id"] as? String, LocalMap.today(store, cid).isEmpty {
+        if let cid = comp["id"] as? String, LocalMap.lifeOn(store, cid), LocalMap.today(store, cid).isEmpty {
             Task { await LocalMap.ensureDay(self, cid) }
         }
         let settings = comp["settings"] as? [String: Any] ?? [:]
