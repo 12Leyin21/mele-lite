@@ -24,7 +24,7 @@ final class LocalStore: @unchecked Sendable {
     func read(_ name: String) -> Any? {
         lock.withLock {
             guard let d = try? Data(contentsOf: root.appendingPathComponent(name)) else { return nil }
-            return try? JSONSerialization.jsonObject(with: d)
+            return try? JSONSerialization.jsonObject(with: d, options: .fragmentsAllowed)
         }
     }
 
@@ -32,7 +32,10 @@ final class LocalStore: @unchecked Sendable {
         lock.withLock {
             let url = root.appendingPathComponent(name)
             try? fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if let d = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys]) {
+            // 单独一个字符串 / 数字（比如「今天推过了」存的日期）也要能存；存不了的（不是 JSON 的东西）跳过——
+            // data(withJSONObject:) 碰到不合法的会抛 ObjC 异常，try? 接不住，整个 App 闪退（10-05 夜推歌就这么崩的）
+            let ok = JSONSerialization.isValidJSONObject(value) || value is String || value is NSNumber || value is NSNull
+            if ok, let d = try? JSONSerialization.data(withJSONObject: value, options: [.sortedKeys, .fragmentsAllowed]) {
                 try? d.write(to: url, options: .atomic)
             }
         }
