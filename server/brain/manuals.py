@@ -1,0 +1,63 @@
+"""Lumi 的说明书（照之前自用的 App的格式，Tilia 2026-09-26 定）：
+- manuals/<语言>/lumi.md：速查 + 手册目录，每轮都在（放在壹层，走缓存）。
+- manuals/<语言>/<功能>.md：每个功能一本。第一行标 <!-- mode: always --> 或 <!-- mode: on-demand -->：
+  · always（常驻）：全文附在 lumi.md 后面，也在壹层走缓存——天天用的功能，不用翻、不会慢；
+  · on-demand（现翻）：目录里只有一行，用到时 Lumi 调 read_manual 翻——偶尔才用、细则又长的功能。
+  翻一次吃不到缓存、还要多调一次模型，所以只给少用的功能。常驻的要写短：真正要省的是注意力。"""
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
+
+ROOT = Path(__file__).with_name("manuals")
+_MODE = re.compile(r"^<!--\s*mode:\s*(always|on-demand)\s*-->\s*\n?")
+
+
+@dataclass(frozen=True)
+class Manual:
+    name: str
+    mode: str          # always / on-demand
+    text: str
+
+
+@lru_cache
+def load(lang: str) -> tuple[str, tuple[Manual, ...]]:
+    folder = ROOT / lang
+    index = (folder / "lumi.md").read_text(encoding="utf-8").strip()
+    out = []
+    for p in sorted(folder.glob("*.md")):
+        if p.stem == "lumi":
+            continue
+        raw = p.read_text(encoding="utf-8")
+        m = _MODE.match(raw)
+        if not m:
+            raise ValueError(f"{p}: 第一行要写 <!-- mode: always --> 或 <!-- mode: on-demand -->")
+        out.append(Manual(p.stem, m.group(1), raw[m.end():].strip()))
+    return index, tuple(out)
+
+
+_TALK = {"zh": "## 说话", "en": "## How you talk"}
+
+
+def render_handbook(lang: str, chat_rules: bool = True) -> str:
+    """chat_rules=False（长文模式，10-01 Tilia）：说明书里「说话」那一节（短消息、像真人发微信）整节拿掉，
+    人设 / 角色卡自己的文风说了算；日常模式照旧保留。"""
+    index, ms = load(lang)
+    if not chat_rules:
+        head = _TALK.get(lang, _TALK["en"])
+        start = index.find(head)
+        if start >= 0:
+            end = index.find("\n## ", start + len(head))
+            index = (index[:start] + (index[end + 1:] if end >= 0 else "")).rstrip() + "\n"
+    return "\n\n".join([index, *(m.text for m in ms if m.mode == "always")])
+
+
+def manual_names(lang: str) -> list[str]:
+    return [m.name for m in load(lang)[1]]
+
+
+def read_manual(name: str, lang: str) -> str | None:
+    wanted = (name or "").strip().lower().removesuffix(".md")
+    return next((m.text for m in load(lang)[1] if m.name == wanted), None)

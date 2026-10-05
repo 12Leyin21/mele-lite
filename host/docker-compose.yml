@@ -1,0 +1,49 @@
+# Mele Host（10-04）：数据库 + 主程序 + Caddy（自动 HTTPS）。配置在同目录 .env（安装脚本生成）。
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mele
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: mele
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mele -d mele"]
+      interval: 5s
+      retries: 20
+
+  mele:
+    image: ${MELE_IMAGE:-ghcr.io/12leyin21/mele-host:latest}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NEWAPP_DSN: postgresql://mele:${DB_PASSWORD}@db:5432/mele
+      NEWAPP_MASTER_KEY: ${MASTER_KEY}
+      NEWAPP_SECRET: ${SECRET}
+      NEWAPP_PUBLIC_URL: https://${MELE_DOMAIN}
+      NEWAPP_HOST: "1"
+      NEWAPP_RERANK: ${RERANK:-0}
+    volumes:
+      - data:/data
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [mele]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MELE_DOMAIN: ${MELE_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+
+volumes:
+  db:
+  data:
+  caddy:

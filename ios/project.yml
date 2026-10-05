@@ -1,0 +1,78 @@
+# Mele Lite 的 iOS 工程。装 xcodegen（brew install xcodegen）后在这个目录跑 `xcodegen generate`，生成 MeleLite.xcodeproj。
+# 第一次编之前：把下面的 DEVELOPMENT_TEAM 换成你自己的团队号、PRODUCT_BUNDLE_IDENTIFIER 换成你自己的包名。
+name: MeleLite
+options:
+  bundleIdPrefix: com.example
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+
+packages:
+  MeleLiteParts:
+    path: ..
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Automatic
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: "1.0"
+    DEVELOPMENT_TEAM: ""          # ← 你的团队号（Xcode → Settings → Accounts 里看）
+
+targets:
+  MeleLite:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - Shared
+      - ActivityShared
+      - path: Lite
+        excludes: [Info.plist, Lite.entitlements]
+      - path: ../CREDITS.md
+        buildPhase: resources
+    dependencies:
+      - package: MeleLiteParts
+        product: MeleLiteCore
+    info:
+      path: Lite/Info.plist
+      properties:
+        CFBundleDisplayName: Mele Lite
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        UIAppFonts: [Ballet.ttf]
+        CFBundleDevelopmentRegion: zh-Hans
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        NSCameraUsageDescription: 用于在聊天里直接拍照发给 TA。
+        NSPhotoLibraryUsageDescription: 用于从相册选照片发给 TA。
+        NSFaceIDUsageDescription: 打开隐私相册和上锁的抽屉时验证是你。
+        NSMicrophoneUsageDescription: 按住麦克风给 TA 发语音时录音。
+        NSHealthShareUsageDescription: 首页健康小组件显示步数、距离、活动消耗、睡眠、心率；你打开「步数和睡眠」后，TA 聊天时知道你今天走了多少、昨晚睡了多久（只读）。
+        NSHealthUpdateUsageDescription: Mele Lite 不会往「健康」里写任何数据，只读步数、睡眠等给首页小组件看。
+        NSAppleMusicUsageDescription: 让 TA 知道你在「音乐」里放什么歌。
+        NSLocalNetworkUsageDescription: 连你自己在家里电脑上部署的记忆库（MCP 服务）。
+        # TA 那边（10-04）：Me 里单独打开才会问
+        NSLocationWhenInUseUsageDescription: 拿你那边的天气，和你不在家时让 TA 知道你在哪（只在打开 App 时看，不记你走过的路）。
+        NSCalendarsFullAccessUsageDescription: 让 TA 知道你接下来几天有什么事（只读标题和时间）。
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true   # 接 MCP：本机 / 局域网的 http 记忆库（正式用的地址走 HTTPS）
+        CFBundleURLTypes:
+          - CFBundleURLName: chat.mele.app
+            CFBundleURLSchemes: [mele]
+    entitlements:
+      path: Lite/Lite.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.weatherkit: true
+        # Mele Host 推送（10-04）：经中转站来的推送；通知扩展跟 App 共用一个 App Group 拿解密钥匙
+        aps-environment: development
+        com.apple.security.application-groups: [group.chat.mele.app]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.melelite   # ← 换成你自己的
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LITE"

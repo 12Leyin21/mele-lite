@@ -1,0 +1,154 @@
+"""ElevenLabs 接头（10-03，声音第一块；设计 docs/specs/2026-10-03-voice-notes-design.md）。
+
+合成（语音条 / 念给我听用 eleven_v4）、列官方嗓子、用文字描述设计嗓子、把设计出来的那把存进账号、查声音位。
+v4 只认 stability 0 / 0.5 / 1（用 0.5），不认 speed；previous_text / next_text 让前后句语气接得上（之前自用的 App 10-01 实测）。
+价格（每千字美元，10-03 核对官网 elevenlabs.io/pricing/api）：v4 0.08、v4 turbo 0.04；10/12 前打 72% 折，按原价记账，宁可估高。
+FakeTTS 给测试和演示服务器用，不联网。"""
+from __future__ import annotations
+
+import httpx
+
+PRICE_PER_K = {"eleven_v4": 0.08, "eleven_v4_turbo": 0.04}
+NOTE_MODEL = "eleven_v4"
+STT_MODEL = "scribe_v2"
+DESIGN_MODEL = "eleven_ttv_v3"
+
+
+def tts_cost(chars: int, model: str) -> float:
+    return chars / 1000 * PRICE_PER_K.get(model, 0.08)
+
+
+class TTSError(Exception):
+    """kind：auth（key 不对或没权限）/ quota（ElevenLabs 那边额度用完、限流）/ bad_request / server / network"""
+
+    def __init__(self, kind: str, message: str = ""):
+        super().__init__(message or kind)
+        self.kind = kind
+
+
+def _kind(status: int) -> str:
+    if status in (401, 403):
+        return "auth"
+    if status in (402, 429):
+        return "quota"
+    if 400 <= status < 500:
+        return "bad_request"
+    return "server"
+
+
+class ElevenLabs:
+    def __init__(self, api_key: str, base: str = "https://api.elevenlabs.io", client: httpx.AsyncClient | None = None):
+        self.key, self.base = api_key, base.rstrip("/")
+        self._client = client
+
+    async def _req(self, method: str, path: str, **kw) -> httpx.Response:
+        client = self._client or httpx.AsyncClient(timeout=60)
+        try:
+            r = await client.request(method, self.base + path, headers={"xi-api-key": self.key}, **kw)
+        except httpx.HTTPError as e:
+            raise TTSError("network", str(e)) from e
+        finally:
+            if self._client is None:
+                await client.aclose()
+        if r.status_code >= 400:
+            if "missing_permissions" in r.text:          # key 对，只是这一项没开权限（10-04 实测：只开了部分权限的 key）
+                raise TTSError("missing_permissions", r.text[:300])
+            raise TTSError(_kind(r.status_code), r.text[:300])
+        return r
+
+    async def synth(self, text: str, voice_id: str, model: str = NOTE_MODEL,
+                    previous_text: str | None = None, next_text: str | None = None) -> bytes:
+        body: dict = {"text": text, "model_id": model, "voice_settings": {"stability": 0.5}}
+        if previous_text:
+            body["previous_text"] = previous_text
+        if next_text:
+            body["next_text"] = next_text
+        r = await self._req("POST", f"/v1/text-to-speech/{voice_id}", params={"output_format": "mp3_44100_128"}, json=body)
+        return r.content
+
+    async def premade(self) -> list[dict]:
+        r = await self._req("GET", "/v1/voices")
+        return [{"voice_id": v["voice_id"], "name": v.get("name", ""), "labels": v.get("labels") or {},
+                 "preview_url": v.get("preview_url") or ""}
+                for v in r.json().get("voices", []) if v.get("category") == "premade"]
+
+    async def design(self, description: str, text: str | None = None) -> list[dict]:
+        body: dict = {"voice_description": description, "model_id": DESIGN_MODEL}
+        if text:
+            body["text"] = text
+        else:
+            body["auto_generate_text"] = True
+        r = await self._req("POST", "/v1/text-to-voice/design", json=body)
+        return [{"generated_voice_id": p["generated_voice_id"], "audio_base_64": p["audio_base_64"],
+                 "duration_secs": p.get("duration_secs", 0)} for p in r.json().get("previews", [])]
+
+    async def save_design(self, name: str, description: str, generated_voice_id: str) -> str:
+        r = await self._req("POST", "/v1/text-to-voice", json={"voice_name": name, "voice_description": description,
+                                                                "generated_voice_id": generated_voice_id})
+        return r.json()["voice_id"]
+
+    async def slots(self) -> tuple[int, int]:
+        """（用了几个声音位，上限几个）"""
+        d = (await self._req("GET", "/v1/user/subscription")).json()
+        return int(d.get("voice_slots_used", 0)), int(d.get("voice_limit", 0))
+
+    async def transcribe(self, audio: bytes, mime: str, name: str = "voice.m4a") -> dict:
+        """Scribe v2：转文字 + 标声音事件（笑、叹气）+ 每个词的起止时间。返回 {text, words:[{text,type,start,end}]}。"""
+        r = await self._req("POST", "/v1/speech-to-text",
+                            data={"model_id": STT_MODEL, "tag_audio_events": "true", "timestamps_granularity": "word"},
+                            files={"file": (name, audio, mime or "audio/mp4")})
+        d = r.json()
+        return {"text": d.get("text", ""), "words": d.get("words") or []}
+
+    async def check(self) -> None:
+        """填 key 时轻探一下（不花钱）。认得这把 key、只是没开「看模型」权限的照收。"""
+        try:
+            await self._req("GET", "/v1/models")
+        except TTSError as e:
+            if e.kind != "missing_permissions":
+                raise
+
+
+class FakeTTS:
+    """不联网：合成返回一小段假字节；记下每次调用，测试里看。"""
+
+    def __init__(self, fail: str | None = None, slots: tuple[int, int] = (0, 30)):
+        self.calls: list[tuple] = []
+        self.fail, self._slots = fail, slots
+        self.transcript = {"text": "今天好累", "words": [
+            {"text": "今天", "type": "word", "start": 0.0, "end": 0.6}, {"text": " ", "type": "spacing", "start": 0.6, "end": 1.6},
+            {"text": "好累", "type": "word", "start": 1.6, "end": 2.2},
+            {"text": "(sighs)", "type": "audio_event", "start": 2.3, "end": 2.9}]}
+
+    def _maybe_fail(self):
+        if self.fail:
+            raise TTSError(self.fail)
+
+    async def synth(self, text, voice_id, model=NOTE_MODEL, previous_text=None, next_text=None) -> bytes:
+        self.calls.append(("synth", text, voice_id, model, previous_text, next_text))
+        self._maybe_fail()
+        return b"ID3fake" + text.encode()
+
+    async def premade(self) -> list[dict]:
+        self.calls.append(("premade",))
+        return [{"voice_id": "v_demo", "name": "Demo", "labels": {}, "preview_url": ""}]
+
+    async def design(self, description, text=None) -> list[dict]:
+        self.calls.append(("design", description))
+        self._maybe_fail()
+        return [{"generated_voice_id": f"g{i}", "audio_base_64": "", "duration_secs": 3} for i in range(3)]
+
+    async def save_design(self, name, description, generated_voice_id) -> str:
+        self.calls.append(("save_design", name, generated_voice_id))
+        return f"v_{generated_voice_id}"
+
+    async def slots(self) -> tuple[int, int]:
+        return self._slots
+
+    async def transcribe(self, audio, mime, name="voice.m4a") -> dict:
+        self.calls.append(("transcribe", len(audio)))
+        self._maybe_fail()
+        return self.transcript
+
+    async def check(self) -> None:
+        self._maybe_fail()

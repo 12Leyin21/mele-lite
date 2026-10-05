@@ -1,0 +1,452 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>测试台</title>
+<style>
+:root{--bg:#f6f3ee;--panel:#fffdf9;--ink:#2b2622;--muted:#8a8078;--line:#e6dfd6;--me:#2b2622;--me-ink:#fffdf9;--it:#fff;--accent:#c96f4a;--card:#f1ebe3;--err:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#171513;--panel:#1f1c19;--ink:#ece6df;--muted:#9a9088;--line:#322d28;--me:#ece6df;--me-ink:#1f1c19;--it:#2a2622;--accent:#e08a63;--card:#2a2622;--err:#f2b8b5}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"PingFang SC","Helvetica Neue",sans-serif;height:100vh;display:grid;grid-template-columns:1fr 360px}
+main{display:flex;flex-direction:column;min-width:0;height:100vh}
+header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:10px}
+header b{font-size:17px}header span{color:var(--muted);font-size:13px}
+#bar{padding:8px 20px;border-bottom:1px solid var(--line);display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+#bar select{max-width:180px}#bar button{padding:4px 10px;font-size:13px}#bar label{margin:0;gap:6px}
+body.incognito main{background:repeating-linear-gradient(135deg,transparent 0 14px,rgba(128,128,128,.06) 14px 28px)}
+#incoTip{display:none;padding:6px 20px;font-size:12px;color:var(--accent);border-bottom:1px solid var(--line)}body.incognito #incoTip{display:block}
+.row[data-mid]{cursor:context-menu}
+#stats{padding:6px 20px;font-size:12px;color:var(--muted);border-bottom:1px solid var(--line);white-space:nowrap;overflow-x:auto}
+#stats b{color:var(--accent);font-weight:600}
+#log{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:6px}
+.row{display:flex}.row.me{justify-content:flex-end}
+.bubble{max-width:72%;padding:9px 13px;border-radius:18px;white-space:pre-wrap;word-break:break-word;background:var(--it);box-shadow:0 1px 0 var(--line)}
+.me .bubble{background:var(--me);color:var(--me-ink)}
+.chip{align-self:flex-start;font-size:12px;color:var(--muted);background:var(--card);border-radius:999px;padding:3px 10px;margin:2px 0}
+details.think{align-self:flex-start;max-width:72%;font-size:13px;color:var(--muted)}
+details.think summary{cursor:pointer;list-style:none}details.think div{white-space:pre-wrap;padding:6px 0 4px 12px;border-left:2px solid var(--line)}
+.typing{align-self:flex-start;color:var(--muted);font-size:13px;padding:4px 2px}
+.err{align-self:center;color:var(--err);font-size:13px}.notice{align-self:center;color:var(--accent);font-size:13px}
+form#send{display:flex;gap:8px;padding:14px 20px;border-top:1px solid var(--line)}
+#text{flex:1;resize:none;border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--panel);color:var(--ink);font:inherit;height:46px}
+button{border:0;border-radius:12px;padding:8px 16px;background:var(--accent);color:#fff;font:inherit;cursor:pointer}button:disabled{opacity:.5}
+aside{border-left:1px solid var(--line);background:var(--panel);height:100vh;overflow-y:auto}
+nav{display:flex;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}
+nav button{flex:1;background:none;color:var(--muted);border-radius:0;padding:12px 0}nav button.on{color:var(--ink);box-shadow:inset 0 -2px 0 var(--accent)}
+section{padding:16px;display:none}section.on{display:block}
+h4{margin:16px 0 6px;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+pre{white-space:pre-wrap;word-break:break-word;font:13px/1.5 ui-monospace,Menlo,monospace;background:var(--card);border-radius:10px;padding:10px;margin:0}
+label{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:8px 0;font-size:14px}label small{display:block;color:var(--muted);font-size:12px}
+input,select,textarea{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:5px 8px}
+textarea{width:100%;min-height:90px}
+.clock{display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)}
+.clock div{flex:1}.clock small{color:var(--muted)}.clock button{padding:2px 8px;font-size:12px;background:var(--card);color:var(--ink)}
+.tag{display:inline-block;font-size:11px;border-radius:6px;padding:0 5px;margin-right:4px;background:var(--card);color:var(--muted)}
+.tag.self{color:var(--accent)}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.btns button.soft{background:var(--card);color:var(--ink)}
+details.wake{align-self:center;font-size:12px;color:var(--muted);max-width:80%}details.wake summary{cursor:pointer;list-style:none;text-align:center}
+details.wake div{white-space:pre-wrap;padding:6px 10px;margin-top:4px;background:var(--card);border-radius:10px;font-size:12px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}.kv b{font-weight:500;color:var(--muted)}
+@media (max-width:1000px){body{grid-template-columns:1fr 300px}}
+@media (max-width:720px){body{grid-template-columns:1fr}aside{display:none}}
+</style>
+</head>
+<body>
+<main>
+  <header><b id="title">测试台</b><span id="model"></span><a href="/memories" target="_blank" style="margin-left:auto;color:var(--accent);font-size:13px;text-decoration:none">她记了什么 →</a></header>
+  <div id="bar">联系人 <select id="c_sel"></select><button id="c_add" type="button" title="加一个联系人">＋</button>
+    窗口 <select id="w_sel"></select><button id="w_new" type="button">新窗口</button>
+    <label>无痕<input id="inco" type="checkbox"></label><span style="margin-left:auto">右键（手机长按）你的一句：改了重发；她一轮的最后一条：重新回</span></div>
+  <div id="incoTip">无痕中：她不知道你是谁，这段不存档、她也什么都不记；关掉就像没发生过</div>
+  <div id="stats">还没聊</div>
+  <div id="log"></div>
+  <form id="send"><textarea id="text" placeholder="说点什么…（Enter 发送，Shift+Enter 换行）"></textarea><button id="go">发送</button></form>
+</main>
+<aside>
+  <nav><button data-tab="turn" class="on">这一轮</button><button data-tab="ledger">账本</button><button data-tab="settings">设置</button><button data-tab="patrol">巡逻</button><button data-tab="dd">远事·抽屉</button></nav>
+  <section id="turn" class="on">
+    <h4>想起了什么</h4><pre id="recall">（还没有）</pre>
+    <h4>贴了哪些提醒</h4><pre id="inj">（还没有）</pre>
+    <h4>这一轮用量</h4><div class="kv" id="usage"></div>
+    <h4>今天一共</h4><div class="kv" id="today"></div>
+  </section>
+  <section id="ledger"><h4>账本（贰层）</h4><pre id="ledgerText">（还没有）</pre><h4>便利贴</h4><pre id="sticky">（空）</pre></section>
+  <section id="settings">
+    <h4>常用</h4>
+    <label>名字<input id="p_name"></label>
+    <label><span>你的名字<small>账本里写你就用它；空着写「TA」</small></span><input id="s_uname" style="width:110px"></label>
+    <label><span>怎么指代你<small>它心里想你的时候用哪个字</small></span><select id="s_pron"><option value="she">她</option><option value="he">他</option><option value="they">TA</option></select></label>
+    <label>怎么称呼你<input id="p_call"></label>
+    <label><span>它的性别<small>出厂不说</small></span><select id="p_gender"><option value="">不说</option><option value="female">女</option><option value="male">男</option></select></label>
+    <label>温暖<select id="s_warm"><option value="low">淡一点</option><option value="mid">刚好</option><option value="high">很暖</option></select></label>
+    <label>主动<select id="s_init"><option value="low">等你开口</option><option value="mid">刚好</option><option value="high">常常主动找</option></select></label>
+    <label>幽默<select id="s_humor"><option value="low">少开玩笑</option><option value="mid">偶尔</option><option value="high">爱逗你</option></select></label>
+    <label>联想强弱<select id="s_recall"><option value="off">关</option><option value="light">弱</option><option value="medium">中</option><option value="rich">强</option></select></label>
+    <label><span>等你说完再回（秒）<small>连着发几条，停下这么久它才开口，几条一起回；0 = 马上回</small></span><input id="s_wait" type="number" min="0" max="60" style="width:70px"></label>
+    <label><span>记性长度（token）<small>空着 = 用模型默认。越长越记得原话，也越贵</small></span><input id="s_len" type="number" min="1" style="width:110px"></label>
+    <h4>高级</h4>
+    <label><span>细读<small>把你这句话和可能相关的记忆逐字对一遍再决定要不要想起来：更准、漏得少，每条回复慢一点点</small></span><input id="s_careful" type="checkbox"></label>
+    <label><span>每次最多几条<small>空着 = 不限。管的是条数不是字数，一个字都不会丢</small></span><input id="s_bubbles" type="number" min="1" style="width:70px"></label>
+    <label>长文模式<input id="s_long" type="checkbox"></label>
+    <label><span>怎么想事<small>原生思考：模型自己算（Claude 好用）；手写独白：写在回复最前面再切下来（DeepSeek 好用，听风格、还省钱）</small></span><select id="s_think"><option value="auto">看模型</option><option value="native">原生思考</option><option value="monologue">手写独白</option><option value="off">不想</option></select></label>
+    <label><span>思考风格<small>每轮提醒它怎么想事：放开想、顺着感受走、不列提纲</small></span><input id="s_ts" type="checkbox"></label>
+    <label><span>提醒用工具<small>每隔几轮提醒它该记的记、该查的查</small></span><input id="s_tr" type="checkbox"></label>
+    <label><span>「记住了」哨兵<small>它嘴上说记住了却没真记，下一轮提醒它补上</small></span><input id="s_rm" type="checkbox"></label>
+    <label>时区<input id="s_tz" style="width:160px"></label>
+    <h4>自定义注入（JSON）</h4>
+    <textarea id="s_inj" spellcheck="false"></textarea>
+    <h4>导入人设（可选，会替换出厂角色）</h4>
+    <textarea id="p_import"></textarea><small id="p_cost" style="color:var(--muted)"></small>
+    <p><button id="save" type="button">保存</button> <button id="cache" type="button" style="background:var(--card);color:var(--ink)">缓存体检</button></p>
+    <pre id="cacheOut" style="display:none"></pre>
+  </section>
+  <section id="dd">
+    <h4>它记着的日子（TA 看得见）</h4><div id="dd_dates"></div>
+    <label>哪天<input type="date" id="dd_day"></label><label><span>几点<small>可以不填</small></span><input type="time" id="dd_time"></label>
+    <label>什么事<input id="dd_title" style="width:150px"></label><label>备注<input id="dd_note" style="width:150px"></label>
+    <div class="btns"><button id="dd_add">记一件</button></div>
+    <small style="color:var(--muted)">记下就排好三次醒来（前一晚 / 当天 / 第二天），在「巡逻」栏的钟里也看得到；拨快时间 + 跑一圈就能试。</small>
+    <h4>抽屉（测试台看得见全文，正式 app 看不见）</h4><div id="dd_letters"></div>
+  </section>
+  <section id="patrol">
+    <h4>现在（测试台的钟）</h4><div class="kv" id="pt_now"></div>
+    <div class="btns"><button class="soft" data-fwd="1">拨快 1 小时</button><button class="soft" data-fwd="3">拨快 3 小时</button>
+      <button class="soft" data-fwd="24">拨快一天</button><button class="soft" id="pt_reset">回到现在</button></div>
+    <h4>叫醒它</h4>
+    <label>理由<select id="pt_reason"><option value="whim">心血来潮</option><option value="night_awake">深夜你还醒着</option>
+      <option value="asleep">你睡着了</option><option value="user">你定的钟</option><option value="self">它自己约的钟</option></select></label>
+    <label><span>钟上那句<small>选了「你定的 / 它约的」才用得上</small></span><input id="pt_note" style="width:150px"></label>
+    <div class="btns"><button id="pt_wake">现在叫醒它</button><button class="soft" id="pt_tick">跑一圈巡逻</button></div>
+    <small style="color:var(--muted)">「现在叫醒它」不过门，直接叫；「跑一圈」跟正式服务器每分钟那一圈一样，心跳要过门、钟要到点。</small>
+    <label><span>测试台自己每分钟巡一圈<small>默认关：开着它会真的醒来、真的花钱</small></span><input type="checkbox" id="pt_loop"></label>
+    <h4>多久来找你</h4>
+    <label>档位<select id="pt_level"><option value="low">低</option><option value="mid">中</option><option value="high">高</option><option value="max">极高</option></select></label>
+    <label><span>心跳<small>关了只剩你定的钟和它约的钟</small></span><input type="checkbox" id="pt_hb"></label>
+    <label>几点睡<input type="time" id="pt_sf"></label><label>几点起<input type="time" id="pt_st"></label>
+    <label><span>白天间隔（分钟）<small>空 = 跟档位</small></span><input type="number" id="pt_o_day_gap_min" style="width:80px"></label>
+    <label><span>深夜醒着最多找几次</span><input type="number" id="pt_o_night_awake_max" style="width:80px"></label>
+    <label><span>睡着时间隔（分钟）<small>0 = 不叫</small></span><input type="number" id="pt_o_asleep_gap_min" style="width:80px"></label>
+    <label><span>每天最多醒几次</span><input type="number" id="pt_o_daily_cap" style="width:80px"></label>
+    <div class="btns"><button id="pt_save">保存</button></div>
+    <h4>一个月最多大概（按现在的模型）</h4><div class="kv" id="pt_est"></div>
+    <h4>所有的钟</h4><div id="pt_clocks"></div>
+    <h4>加一个你定的钟</h4>
+    <label>样子<select id="pt_shape"><option value="at">固定时间</option><option value="once">一次性</option>
+      <option value="every">每隔几分钟</option><option value="window">时间段里随机</option></select></label>
+    <label><span>时间 / 从<small>08:00；一次性写 2026-10-03 14:00</small></span><input id="pt_a" style="width:150px"></label>
+    <label><span>到<small>每隔、随机才要</small></span><input id="pt_b" style="width:150px"></label>
+    <label><span>每隔（分钟）</span><input type="number" id="pt_every" style="width:80px"></label>
+    <label><span>哪几天<small>0,1,2,3,4（周一 = 0，空 = 每天）</small></span><input id="pt_days" style="width:150px"></label>
+    <label>想让它干嘛<input id="pt_cnote" style="width:150px"></label>
+    <div class="btns"><button id="pt_addc">加</button></div>
+    <h4>醒来账（最近 40 次）</h4><pre id="pt_log">（还没醒过）</pre>
+  </section>
+</aside>
+<script>
+const $ = id => document.getElementById(id);
+const log = $("log");
+let typingEl = null, current = null;
+const add = el => { log.appendChild(el); log.scrollTop = log.scrollHeight; return el; };
+const div = (cls, text) => { const d = document.createElement("div"); d.className = cls; if (text != null) d.textContent = text; return d; };
+const bubble = (role, text, mid) => {
+  const r = div("row " + (role === "user" ? "me" : "it")); r.appendChild(div("bubble", text));
+  if (mid != null) r.dataset.mid = mid;
+  return add(r);
+};
+const hitRate = u => { const all = u.input + u.cache_read + u.cache_write; return all ? Math.round(100 * u.cache_read / all) : null; };
+const pct = v => v == null ? "—" : v + "%";
+let lastHit = null;
+function showToday(t) {
+  kv($("today"), {"调用": t.calls, "没走缓存": t.input, "缓存读": t.cache_read, "缓存写": t.cache_write, "输出": t.output,
+    "命中率": pct(hitRate(t)), "花了": "$" + t.cost_usd.toFixed(5) + (t.unknown_cost_calls ? `（另有 ${t.unknown_cost_calls} 次算不出）` : "")});
+}
+const money = v => v == null ? "算不出（清单外的模型）" : "$" + Number(v).toFixed(5);
+function typing(on) {
+  if (on && !typingEl) typingEl = add(div("typing", "正在输入…"));
+  if (!on && typingEl) { typingEl.remove(); typingEl = null; }
+}
+function think(text) {
+  const d = document.createElement("details"); d.className = "think";
+  const s = document.createElement("summary"); s.textContent = "› ✦ 想了想";
+  d.append(s, div("", text)); add(d);
+}
+function kv(el, obj) {
+  el.innerHTML = "";
+  for (const [k, v] of Object.entries(obj)) {
+    const b = document.createElement("b"); b.textContent = k;
+    const s = document.createElement("span"); s.textContent = v; el.append(b, s);
+  }
+}
+function onEvent(e) {
+  switch (e.type) {
+    case "typing": typing(true); break;
+    case "bubble": typing(false); bubble("assistant", e.text); break;
+    case "thinking": think(e.text); break;
+    case "card": add(div("chip", "🗂 " + e.text + (e.private ? "（正式版不显示）" : ""))); break;
+    case "recall": $("recall").textContent = [...e.full.map(t => "整条 · " + t), ...e.lines.map(t => "一行 · " + t), ...e.people.map(n => "人物卡 · " + n)].join("\n") || "（没有）"; break;
+    case "injections": $("inj").textContent = e.lines.join("\n") || "（没有）"; break;
+    case "usage": {
+      const hit = hitRate(e);
+      kv($("usage"), {"整个上下文": e.prompt_total, "没走缓存": e.input, "缓存读": e.cache_read, "缓存写": e.cache_write, "输出": e.output,
+        "命中率": pct(hit), "上一轮命中": pct(lastHit), "这一轮": money(e.cost_usd)});
+      showToday(e.today);
+      $("stats").innerHTML = `这一轮 · 输入 ${e.input} · 缓存读 ${e.cache_read} · 缓存写 ${e.cache_write} · 输出 ${e.output} · `
+        + `命中 <b>${pct(hit)}</b>（上一轮 ${pct(lastHit)}） · ${money(e.cost_usd)} ｜ 今天命中 ${pct(hitRate(e.today))} · $${e.today.cost_usd.toFixed(4)}`;
+      lastHit = hit;
+      break;
+    }
+    case "error": typing(false); add(div("err", e.message)); break;
+    case "notice": add(div("notice", e.text)); break;
+    case "ledger":
+      if (e.status === "done") add(div("chip", `📒 ${e.count} 条旧对话卷进了账本`));
+      if (e.status === "failed") add(div("chip", "📒 这次账本没写成，旧对话先留着"));
+      break;
+    case "done": typing(false); loadState(false); break;
+    case "wake": lastWake = e.outcome; add(div("chip", {said: "⏰ 它醒了，开口了", silent: "⏰ 它醒了，选择不说话（<silent>）", error: "⏰ 醒来时模型报错：" + e.error,
+      no_key: "⏰ 没有钥匙 / 试用用完了，没醒成"}[e.outcome] + " · " + money(e.cost_usd))); break;
+  }
+}
+// 等你说完再回（照之前自用的 App的进线缓冲）：发出去的先挂着，每来一条、每敲一个字都重新计时，
+// 安静满「等你说完」那么多秒才把挂着的几条打包成一轮；它回话的时候照样能接着发，回完再算。
+// 这是测试页的做法；正式 app 的接口要在服务器上做同样的事（换设备、切后台都不丢）。
+let pending = [], waitTimer = null, busy = false;
+function waitSecs() { return current?.settings?.reply_wait ?? 10; }
+function schedule() {
+  clearTimeout(waitTimer);
+  if (busy || !pending.length) return;
+  waitTimer = setTimeout(flush, waitSecs() * 1000);
+}
+async function flush() {
+  if (busy || !pending.length) return;
+  const text = pending.join("\n"); pending = []; busy = true;
+  await send(text);
+  busy = false; schedule();
+}
+function queue(text) {
+  bubble("user", text); pending.push(text);
+  if (waitSecs() === 0) { clearTimeout(waitTimer); flush(); } else schedule();
+}
+$("text").addEventListener("input", () => { if (pending.length) schedule(); });
+async function send(text, resend) { await stream("/api/chat", {text, resend: !!resend}); }
+async function stream(url, body) {
+  $("recall").textContent = "（没有）";
+  try {
+    const res = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+    const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const {value, done} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream: true}); let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (chunk.startsWith("data: ")) onEvent(JSON.parse(chunk.slice(6)));
+      }
+    }
+  } catch (err) { typing(false); add(div("err", "连不上服务器：" + err)); }
+}
+$("send").addEventListener("submit", ev => { ev.preventDefault(); const t = $("text").value.trim(); if (!t) return; $("text").value = ""; queue(t); });
+$("text").addEventListener("keydown", ev => { if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("send").requestSubmit(); } });
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("nav button, section").forEach(x => x.classList.remove("on"));
+  b.classList.add("on"); $(b.dataset.tab).classList.add("on");
+});
+async function loadState(first) {
+  const s = await (await fetch("/api/state")).json(); current = s;
+  $("model").textContent = `${s.model.provider} · 聊天 ${s.model.chat} · 记账 ${s.model.ledger}`;
+  $("title").textContent = s.persona.name || "测试台";
+  $("ledgerText").textContent = s.ledger || "（还没有）";
+  $("sticky").textContent = s.sticky || "（空）";
+  showToday(s.usage_today);
+  showWhere(s.where);
+  if (first) {
+    log.innerHTML = "";
+    for (const m of s.history) {  // 它的话按空行分回一条条气泡；只有它一轮的最后一条能点「重新回」
+      if (m.role === "wake") { wakeChip(m.text); continue; }
+      const parts = (m.role === "assistant" ? m.text.split(/\n\s*\n/) : [m.text]).map(t => t.trim()).filter(Boolean);
+      parts.forEach((t, i) => bubble(m.role, t, i === parts.length - 1 ? m.id : null));
+    }
+    fillSettings(s);
+  } else {                        // 刚聊完的这几条补上消息编号，好倒回
+    const lu = [...s.history].reverse().find(m => m.role === "user" || m.role === "wake"), la = [...s.history].reverse().find(m => m.role === "assistant");
+    const fresh = [...log.querySelectorAll(".row:not([data-mid]):not([data-skip])")];
+    fresh.filter(r => r.classList.contains("me")).forEach(r => { if (lu) r.dataset.mid = lu.id; });
+    const its = fresh.filter(r => !r.classList.contains("me"));
+    its.forEach((r, i) => { if (i === its.length - 1 && la) r.dataset.mid = la.id; else r.dataset.skip = "1"; });
+  }
+}
+function wakeChip(text) {
+  const d = document.createElement("details"); d.className = "wake";
+  const s = document.createElement("summary"); s.textContent = "⏰ 它自己醒来了（点开看叫醒它的那段话 · 正式版不显示）";
+  d.append(s, div("", text)); add(d);
+}
+function showWhere(w) {
+  const fill = (sel, items, cur, label) => { sel.innerHTML = ""; items.forEach(x => { const o = document.createElement("option");
+    o.value = x.id; o.textContent = label(x); o.selected = x.id === cur; sel.appendChild(o); }); };
+  fill($("c_sel"), w.companions, w.companion, x => x.name);
+  fill($("w_sel"), w.conversations, w.conversation, x => (x.last || "（空）") + " · " + x.at.slice(5, 16).replace("T", " "));
+  $("inco").checked = w.incognito; document.body.classList.toggle("incognito", w.incognito);
+  ["c_sel", "c_add", "w_sel", "w_new"].forEach(id => $(id).disabled = w.incognito);
+}
+async function post(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  if (!r.ok) { alert((await r.json()).detail || "出错了"); return null; }
+  return r.json();
+}
+async function moved(res) { if (res) await loadState(true); }
+$("c_sel").onchange = async () => moved(await post("/api/switch", {companion: $("c_sel").value}));
+$("w_sel").onchange = async () => moved(await post("/api/switch", {conversation: $("w_sel").value}));
+$("c_add").onclick = async () => { const name = prompt("新联系人叫什么？（空着就叫 Lumi）"); if (name === null) return;
+  moved(await post("/api/companions", {name})); };
+$("w_new").onclick = async () => moved(await post("/api/conversations"));
+$("inco").onchange = async () => moved(await post("/api/incognito", {on: $("inco").checked}));
+async function rewindTo(row) {
+  const mine = row.classList.contains("me");
+  if (!confirm(mine ? "从这句重新说？\n这句和之后的消息、她那几轮记下改过的东西都会撤回，这句放回输入栏给你改。"
+                    : "让她重新回这一轮？\n她这一轮的回复和这一轮记下改过的东西会撤回，然后再回一次。")) return;
+  const res = await post("/api/rewind", {message_id: +row.dataset.mid});
+  if (!res) return;
+  await loadState(true);
+  if (res.kind === "edit") { $("text").value = res.text; $("text").focus(); }
+  else { busy = true; await send("", true); busy = false; schedule(); }
+}
+log.addEventListener("contextmenu", ev => { const row = ev.target.closest(".row[data-mid]"); if (!row) return;
+  ev.preventDefault(); rewindTo(row); });
+let pressTimer = null;
+log.addEventListener("touchstart", ev => { const row = ev.target.closest(".row[data-mid]"); if (!row) return;
+  pressTimer = setTimeout(() => rewindTo(row), 600); }, {passive: true});
+["touchend", "touchmove"].forEach(e => log.addEventListener(e, () => clearTimeout(pressTimer)));
+function fillSettings(s) {
+  const st = s.settings, p = s.persona;
+  $("p_name").value = p.name; $("p_call").value = p.call_user; $("p_gender").value = p.gender || "";
+  $("s_warm").value = st.warmth; $("s_init").value = st.initiative; $("s_humor").value = st.humor; $("p_import").value = p.imported;
+  $("s_recall").value = st.recall_level; $("s_len").value = st.memory_length ?? ""; $("s_careful").checked = st.careful_read;
+  $("s_bubbles").value = st.max_bubbles ?? ""; $("s_long").checked = st.long_mode; $("s_think").value = !st.thinking ? "off" : (st.thinking_mode || "auto");
+  $("s_ts").checked = st.sentinels.thinking_style; $("s_tr").checked = st.sentinels.tool_reminder; $("s_rm").checked = st.sentinels.remembered;
+  $("s_tz").value = st.tz; $("s_uname").value = st.user_name; $("s_wait").value = st.reply_wait; $("s_pron").value = st.user_pronoun; $("s_inj").value = JSON.stringify(st.injections, null, 2);
+}
+$("save").onclick = async () => {
+  let inj; try { inj = JSON.parse($("s_inj").value || "[]"); } catch { alert("自定义注入不是合法的 JSON"); return; }
+  const st = {...current.settings, recall_level: $("s_recall").value, memory_length: $("s_len").value ? +$("s_len").value : null,
+    careful_read: $("s_careful").checked, max_bubbles: $("s_bubbles").value ? +$("s_bubbles").value : null, long_mode: $("s_long").checked,
+    thinking: $("s_think").value !== "off", thinking_mode: ["native", "monologue"].includes($("s_think").value) ? $("s_think").value : null, tz: $("s_tz").value, user_name: $("s_uname").value, warmth: $("s_warm").value, initiative: $("s_init").value, humor: $("s_humor").value, reply_wait: $("s_wait").value === "" ? 10 : +$("s_wait").value, user_pronoun: $("s_pron").value, injections: inj,
+    sentinels: {thinking_style: $("s_ts").checked, tool_reminder: $("s_tr").checked, remembered: $("s_rm").checked}};
+  const r1 = await fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(st)});
+  if (!r1.ok) { alert("设置没存上：" + (await r1.json()).detail); return; }
+  const r2 = await fetch("/api/persona", {method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({...current.persona, name: $("p_name").value, call_user: $("p_call").value, gender: $("p_gender").value, imported: $("p_import").value})});
+  const pr = await r2.json();
+  $("p_cost").textContent = pr.import_cost_usd ? `这份人设每轮大概多花 $${pr.import_cost_usd[0].toFixed(5)}（走缓存）～ $${pr.import_cost_usd[1].toFixed(5)}（没走缓存）` : "";
+  await loadState(false);
+};
+$("cache").onclick = async () => {
+  if (!confirm("缓存体检会真的调两次模型，花一点点钱（一般不到一分钱）。继续吗？")) return;
+  const out = $("cacheOut"); out.style.display = "block"; out.textContent = "体检中…";
+  const r = await (await fetch("/api/cache-check", {method: "POST"})).json();
+  out.textContent = ({hit: "✅ 命中了", miss: "⚠️ 没命中", unknown: "❔ 这次没测出来"})[r.result] + "\n" + r.reason;
+};
+// ── 远事 · 抽屉栏 ──
+const PHASE = {eve: "前一晚", day: "当天", after: "第二天"};
+function showDD(p) {
+  const box = $("dd_dates"); box.innerHTML = "";
+  if (!p.dates.length) box.textContent = "（还没有）";
+  for (const f of p.dates) {
+    const row = div("clock"), info = div("");
+    info.innerHTML = '<span class="tag">远事</span><span class="t"></span><br><small></small>';
+    info.querySelector(".t").textContent = `${f.day}${f.time ? " " + f.time : ""} ${f.title}${f.note ? "（" + f.note + "）" : ""}`;
+    info.querySelector("small").textContent = f.wakes.map(w => `${PHASE[w.phase] || w.phase} ${localTime(w.at)}`).join(" · ") || "三次都过了";
+    const b = document.createElement("button"); b.textContent = "删";
+    b.onclick = async () => showDD(await (await fetch("/api/dates/" + f.id, {method: "DELETE"})).json());
+    row.append(info, b); box.appendChild(row);
+  }
+  const lb = $("dd_letters"); lb.innerHTML = "";
+  if (!p.letters.length) lb.textContent = "（抽屉是空的）";
+  for (const x of p.letters) {
+    const row = div("clock"), info = div("");
+    const state = x.opened_at ? "TA 拆了" : (x.unlock_at ? `${x.unlock_at} 解锁` : "只能靠钥匙");
+    info.innerHTML = `<span class="tag self"></span><b class="t"></b><br><small></small>`;
+    info.querySelector(".tag").textContent = state + (x.code ? ` · 码 ${x.code}` : "");
+    info.querySelector(".t").textContent = x.title || "（无题）";
+    info.querySelector("small").textContent = `${localTime(x.written_at)} 写 · ` + x.content;
+    row.appendChild(info);
+    if (!x.opened_at) {
+      const code = document.createElement("input"); code.placeholder = "码"; code.style.width = "56px";
+      const b = document.createElement("button"); b.textContent = "拆";
+      b.onclick = async () => { const r = await post(`/api/drawer/${x.id}/open`, {code: code.value}); if (!r) return;
+        if (r.status !== "ok") alert({wrong: `码不对，还剩 ${r.detail} 次`, locked: `锁着，等 ${r.detail} 秒`, sealed: "还没到日子，也还没给钥匙", missing: "没有这封"}[r.status]);
+        showDD(r); };
+      row.append(code, b);
+    }
+    lb.appendChild(row);
+  }
+}
+async function loadDD() { showDD(await (await fetch("/api/dates_drawer")).json()); }
+$("dd_add").onclick = async () => { const r = await post("/api/dates", {day: $("dd_day").value, time: $("dd_time").value,
+  title: $("dd_title").value, note: $("dd_note").value}); if (r) { $("dd_title").value = ""; $("dd_note").value = ""; showDD(r); } };
+document.querySelector('[data-tab="dd"]').addEventListener("click", loadDD);
+
+// ── 巡逻栏 ──
+let lastWake = null;
+const REASON = {whim: "心血来潮", night_awake: "深夜醒着", asleep: "睡着时", user: "你定的钟", self: "它约的钟", date: "记着的日子"};
+const OUTCOME = {said: "开口了", silent: "没说话", error: "出错", no_key: "没钥匙", skipped_cap: "到上限跳过", skipped_busy: "正忙跳过", gone: "那件事没了，不醒"};
+const SHAPE = c => ({at: `每天 ${c.spec.time}` + (c.spec.days?.length ? `（星期 ${c.spec.days.map(d => "一二三四五六日"[d]).join("")}）` : ""),
+  once: "一次性", every: `每 ${c.spec.every_min} 分钟（${c.spec.from}–${c.spec.to}）`, window: `${c.spec.from}–${c.spec.to} 随机`,
+  heartbeat: "每 20 分钟看一眼门"})[c.shape] || c.shape;
+const localTime = iso => { if (!iso) return "—"; const tz = current?.settings?.tz || undefined;
+  return new Date(iso).toLocaleString("zh-CN", {timeZone: tz, month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", weekday: "short"}); };
+async function loadPatrol() {
+  const p = await (await fetch("/api/patrol")).json(); showPatrol(p);
+}
+function showPatrol(p) {
+  kv($("pt_now"), {"测试台时间": localTime(p.now), "拨快了": p.offset_hours ? p.offset_hours + " 小时" : "没拨",
+    "现在的数字": `白天 ${p.numbers.day_gap_min} 分 · 深夜醒着 ${p.numbers.night_awake_max} 次 · 睡着 ${p.numbers.asleep_gap_min || "不叫"} · 每天 ${p.numbers.daily_cap} 次`});
+  $("pt_loop").checked = p.loop_on;
+  const lv = {low: "低", mid: "中", high: "高", max: "极高"};
+  kv($("pt_est"), Object.fromEntries(Object.entries(p.estimate).map(([k, v]) =>
+    [lv[k], `醒 ${v.wakes_per_month} 次 · ` + (v.usd_per_month == null ? "算不出钱（清单外的模型）" : "$" + v.usd_per_month)])));
+  const box = $("pt_clocks"); box.innerHTML = "";
+  for (const c of p.clocks) {
+    const row = div("clock"), info = div("");
+    const tag = c.kind === "self" ? '<span class="tag self">它约的 · 正式版看不见</span>' : c.kind === "user" ? '<span class="tag">你定的</span>'
+      : c.kind === "date" ? `<span class="tag">远事 · ${PHASE[c.spec.phase] || ""}</span>` : '<span class="tag">心跳</span>';
+    info.innerHTML = tag + `下次 ${localTime(c.next_at)}<br><small></small>`;
+    info.querySelector("small").textContent = SHAPE(c) + (c.note ? " · " + c.note : "") + (c.spec?.paused ? " · 暂停了（连错 3 次）" : "");
+    row.appendChild(info);
+    if (c.kind === "user" || c.kind === "self") { const b = document.createElement("button"); b.textContent = "删";
+      b.onclick = async () => showPatrol(await (await fetch("/api/patrol/clock/" + c.id, {method: "DELETE"})).json()); row.appendChild(b); }
+    box.appendChild(row);
+  }
+  $("pt_log").textContent = p.wakes.map(w => `${localTime(w.at)}  ${REASON[w.reason] || w.reason} → ${OUTCOME[w.outcome] || w.outcome}`
+    + (w.cost_usd ? `  $${w.cost_usd.toFixed(5)}` : "")).join("\n") || "（还没醒过）";
+}
+function fillPatrol(st) {
+  $("pt_level").value = st.patrol_level; $("pt_hb").checked = st.heartbeat_on; $("pt_sf").value = st.sleep_from; $("pt_st").value = st.sleep_to;
+  for (const k of ["day_gap_min", "night_awake_max", "asleep_gap_min", "daily_cap"]) $("pt_o_" + k).value = st.patrol_overrides?.[k] ?? "";
+}
+document.querySelectorAll("[data-fwd]").forEach(b => b.onclick = async () => showPatrol(await post("/api/patrol/forward", {hours: +b.dataset.fwd})));
+$("pt_reset").onclick = async () => showPatrol(await post("/api/patrol/forward", {reset: true}));
+$("pt_tick").onclick = async () => { const p = await post("/api/patrol/tick"); if (!p) return; showPatrol(p);
+  add(div("chip", `🔁 跑了一圈：${p.ran} 个钟到点`)); await loadState(true); };
+$("pt_loop").onchange = async () => { if ($("pt_loop").checked && !confirm("开着测试台它会每分钟巡一圈，真的醒来、真的花钱。开吗？")) { $("pt_loop").checked = false; return; }
+  showPatrol(await post("/api/patrol/loop", {on: $("pt_loop").checked})); };
+$("pt_wake").onclick = async () => { $("pt_wake").disabled = true;
+  await stream("/api/patrol/wake", {reason: $("pt_reason").value, note: $("pt_note").value});
+  $("pt_wake").disabled = false; await loadState(lastWake === "said"); await loadPatrol(); };  // 没开口就不重画，留着那行提示
+$("pt_save").onclick = async () => {
+  const o = {}; for (const k of ["day_gap_min", "night_awake_max", "asleep_gap_min", "daily_cap"]) { const v = $("pt_o_" + k).value; if (v !== "") o[k] = +v; }
+  const st = {...current.settings, patrol_level: $("pt_level").value, heartbeat_on: $("pt_hb").checked,
+    sleep_from: $("pt_sf").value || "00:00", sleep_to: $("pt_st").value || "08:00", patrol_overrides: o};
+  const r = await fetch("/api/settings", {method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify(st)});
+  if (!r.ok) { alert("没存上：" + (await r.json()).detail); return; }
+  await loadState(false); await loadPatrol();
+};
+$("pt_addc").onclick = async () => {
+  const shape = $("pt_shape").value, a = $("pt_a").value.trim(), b = $("pt_b").value.trim();
+  const spec = shape === "at" ? {time: a, days: $("pt_days").value.split(",").map(x => x.trim()).filter(Boolean).map(Number)}
+    : shape === "once" ? {at: a} : shape === "every" ? {every_min: +$("pt_every").value, from: a || "00:00", to: b || "00:00"} : {from: a, to: b};
+  const p = await post("/api/patrol/clock", {shape, spec, note: $("pt_cnote").value}); if (p) showPatrol(p);
+};
+document.querySelector('[data-tab="patrol"]').addEventListener("click", () => { fillPatrol(current.settings); loadPatrol(); });
+loadState(true);
+</script>
+</body>
+</html>

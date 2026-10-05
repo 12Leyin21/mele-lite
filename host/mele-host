@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# Mele Host 管理命令（10-04），装在 /usr/local/bin。
+set -euo pipefail
+cd /opt/mele-host
+set -a; . ./.env; set +a
+
+case "${1:-help}" in
+  pair)
+    out=$(docker compose exec -T mele python -m api.host pair)
+    echo "$out"
+    link=$(printf '%s\n' "$out" | sed -n 's/^配对链接（App 扫二维码用）：//p')
+    if [ -n "$link" ] && command -v qrencode >/dev/null; then qrencode -t ansiutf8 "$link"; fi
+    ;;
+  status) docker compose ps; docker compose exec -T mele python -m api.host status ;;
+  update) docker compose pull && docker compose up -d && docker image prune -f >/dev/null ;;
+  logs)   docker compose logs -f --tail 200 mele ;;
+  stop)   docker compose stop ;;
+  start)  docker compose up -d ;;
+  key)    echo "$MASTER_KEY" ;;
+  *) echo "用法：mele-host pair | status | update | logs | stop | start | key" ;;
+esac

@@ -1,0 +1,7 @@
+# 聊天是 SSE 事件流，flush_interval -1 = 不攒着、来一个字推一个字
+{$MELE_DOMAIN} {
+	encode gzip
+	reverse_proxy mele:8080 {
+		flush_interval -1
+	}
+}

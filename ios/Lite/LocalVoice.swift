@@ -1,0 +1,417 @@
+#if LITE
+import CryptoKit
+import Foundation
+import MeleLiteCore
+
+/// 声音（10-04 Tilia：声音不用服务器，填自己的 ElevenLabs key 就行）：照 server/api/routes_voice.py + brain/voice.py + brain/voice_in.py 搬进手机。
+/// - 钥匙只认用户自己的 ElevenLabs key（钥匙串里 "elevenlabs"）；没有我们出钱的额度。没 key = 不发语音条、不念、不收语音。
+/// - 它在回复里用 🎤 开头标一段 → 那段自己成一条 → 念出来存成 voice-<id>.mp3，挂在那条消息的 voice_clips 上（按文字指纹）。
+/// - 念过的按「文字 + 嗓子 + 模型」指纹存在 voice-cache.json，同一句再念不花钱。
+/// - TA 发语音：Scribe 转文字 + 量语速、停顿、笑和叹气（跟 TA 自己最近 20 条比）→ 附件 kind=voice，caption 是〔语音 12 秒：…〕那行。
+enum LocalVoice {
+    static let mark = "🎤"
+    static let keyID = "elevenlabs"
+    static let noteModel = "eleven_v4"
+    static let defaultTag = "[warm, relaxed, natural] "     // 稿子里一个标签都没有时先垫这一个（10-03 Tilia A/B）
+    static let presets: [(key: String, id: String, name: String, gender: String, zh: String, en: String)] = [
+        ("lauren", "DODLEQrClDo8wCz460ld", "Lauren", "female", "温柔、让人安心", "friendly, comforting, soft"),
+        ("hope", "uYXf8XasLslADfZ2MB4u", "Hope", "female", "明亮、活泼、爱聊天", "bubbly, chatty, bright"),
+        ("andrew", "SF9uvIlY93SJRMdV5jeP", "Andrew", "male", "清亮、有劲儿（原本是足球解说）", "clear and lively (a football commentator by trade)"),
+        ("jon", "Cz0K1kOv9tD8l0b5Qu53", "Jon", "male", "低沉、松弛、好亲近", "relaxed, deep, approachable"),
+    ]
+    static let errors = ["no_key": String(localized: "先在 TA 的设定 → 声音里填你自己的 ElevenLabs key"),
+                         "auth": String(localized: "ElevenLabs 的 key 不对或者没开权限"),
+                         "quota": String(localized: "ElevenLabs 那边额度用完了"),
+                         "server": String(localized: "ElevenLabs 那边出错了，等会儿再试"),
+                         "network": String(localized: "连不上 ElevenLabs"),
+                         "bad_request": String(localized: "这句念不了"),
+                         "too_long": String(localized: "语音最长 2 分钟"),
+                         "missing_permissions": String(localized: "这把 ElevenLabs key 少了权限：在 ElevenLabs 后台给它打开 Text to Speech、Speech to Text 和 Voices")]
+
+    struct Fail: Error { let kind: String }
+
+    // MARK: 路由
+
+    static func handle(_ r: LocalRequest, host: LocalHost) async -> LocalResponse? {
+        let p = r.parts
+        switch (r.method, p.count) {
+        case ("GET", 2) where p == ["voice", "presets"]:
+            let en = r.query["lang"] == "en"
+            return .json(presets.map { ["key": $0.key, "voice_id": $0.id, "name": $0.name, "gender": $0.gender,
+                                        "about": en ? $0.en : $0.zh, "preview": "voice/presets/\($0.key)/preview?lang=\(en ? "en" : "zh")"] })
+        case ("GET", 4) where p[0] == "voice" && p[1] == "presets" && p[3] == "preview":
+            let lang = r.query["lang"] == "en" ? "en" : "zh"
+            guard presets.contains(where: { $0.key == p[2] }),
+                  let url = Bundle.main.url(forResource: "\(p[2])-\(lang)", withExtension: "mp3"),
+                  let d = try? Data(contentsOf: url) else { return .error(404, String(localized: "没有这把")) }
+            return .data(d, mime: "audio/mpeg")
+        case ("GET", 2) where p == ["voice", "quota"]:
+            return .json(["chars_left": 0, "own_key": key(host) != nil])
+        case ("POST", 2) where p == ["keys", "elevenlabs"]:
+            return await saveKey(host, r.json["api_key"] as? String ?? "")
+        case ("POST", 2) where p == ["voice", "design"]:
+            return await design(host, r.json["description"] as? String ?? "")
+        case ("POST", 3) where p[0] == "companions" && p[2] == "voice":
+            return await choose(host, companion: p[1], r.json)
+        case ("GET", 3) where p[0] == "voice" && p[1] == "clips":
+            guard let d = try? Data(contentsOf: host.store.fileURL("voice-\(p[2]).mp3")) else { return .error(404, String(localized: "没有这段")) }
+            return .data(d, mime: "audio/mpeg")
+        case ("POST", 3) where p[0] == "messages" && p[2] == "speak":
+            return await speakMessage(host, Int(p[1]) ?? -1, index: r.json["index"] as? Int ?? -1)
+        case ("POST", 3) where p[0] == "conversations" && p[2] == "voice":
+            return await receive(host, conversation: p[1], r)
+        default: return nil
+        }
+    }
+
+    static func key(_ host: LocalHost) -> String? {
+        let k = host.vault.get(keyID)?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (k?.isEmpty ?? true) ? nil : k
+    }
+
+    private static func err(_ kind: String) -> LocalResponse { .error(400, errors[kind] ?? kind) }
+
+    private static func saveKey(_ host: LocalHost, _ raw: String) async -> LocalResponse {
+        let k = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard k.count >= 20 else { return .error(400, String(localized: "这不像一把 ElevenLabs key")) }
+        do { _ = try await ElevenLabs(key: k).request("GET", "/v1/models") }
+        catch let f as Fail where f.kind == "missing_permissions" {}      // 认得这把 key，只是没开「看模型」：照收
+        catch let f as Fail { return err(f.kind) } catch { return err("network") }
+        host.vault.set(k, for: keyID)
+        return .json(["last4": String(k.suffix(4))], status: 201)
+    }
+
+    private static func design(_ host: LocalHost, _ desc: String) async -> LocalResponse {
+        let d = desc.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (8...400).contains(d.count) else { return .error(400, String(localized: "描述写 8～400 个字")) }
+        guard let k = key(host) else { return .error(403, errors["no_key"]!) }
+        do { return .json(try await ElevenLabs(key: k).design(d)) } catch let f as Fail { return err(f.kind) } catch { return err("network") }
+    }
+
+    private static func choose(_ host: LocalHost, companion cid: String, _ b: [String: Any]) async -> LocalResponse {
+        guard var c = host.store.companion(cid) else { return .error(404, String(localized: "没有这个联系人")) }
+        let name = String((b["name"] as? String ?? "").split(whereSeparator: \.isWhitespace).joined(separator: " ").prefix(30))
+        var voiceID = (b["voice_id"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        if let gid = b["generated_voice_id"] as? String, !gid.isEmpty {
+            guard let k = key(host) else { return .error(403, errors["no_key"]!) }
+            do {
+                let el = ElevenLabs(key: k)
+                let (used, limit) = try await el.slots()
+                if limit > 0 && used >= limit { return .error(409, String(localized: "声音位满了，先在 ElevenLabs 删掉一把再存")) }
+                voiceID = try await el.saveDesign(name: name.isEmpty ? "Mele voice" : name,
+                                                  description: String((b["description"] as? String ?? "").prefix(400)), generated: gid)
+            } catch let f as Fail { return err(f.kind) } catch { return err("network") }
+        }
+        guard !voiceID.isEmpty else { return .error(400, String(localized: "要给 voice_id 或 generated_voice_id")) }
+        var s = c["settings"] as? [String: Any] ?? [:]
+        s["voice_id"] = voiceID; s["voice_name"] = name
+        c["settings"] = s
+        host.store.saveCompanion(c)
+        return .json(["voice_id": voiceID, "voice_name": name])
+    }
+
+    // MARK: 稿子
+
+    private static let tagRE = try! NSRegularExpression(pattern: #"\[[^\[\]\n]{1,60}\]"#)
+
+    static func isVoice(_ bubble: String) -> Bool { bubble.trimmingCharacters(in: .whitespaces).hasPrefix(mark) }
+
+    /// 去掉开头的 🎤，留要念的稿子（带音频标签）
+    static func body(_ bubble: String) -> String {
+        let t = bubble.trimmingCharacters(in: .whitespaces)
+        return t.hasPrefix(mark) ? String(t.dropFirst(mark.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                                 : bubble.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 给人看的逐字稿：去掉 [softly] 这类音频标签
+    static func stripTags(_ text: String) -> String {
+        let ns = text as NSString
+        var out = tagRE.stringByReplacingMatches(in: text, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+        out = out.replacingOccurrences(of: #"[ \t]{2,}"#, with: " ", options: .regularExpression)
+        return out.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 念不成的时候：这一条照常当文字发（去 🎤、去标签）
+    static func asText(_ bubble: String) -> String { stripTags(body(bubble)) }
+
+    static func sha(_ s: String) -> String { SHA256.hash(data: Data(s.utf8)).map { String(format: "%02x", $0) }.joined() }
+
+    static func voiceID(_ settings: [String: Any]) -> String {
+        let v = (settings["voice_id"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+        return v.isEmpty ? presets[0].id : v
+    }
+
+    // MARK: 念
+
+    /// 念一句（有缓存就不花钱）。返回 {id, duration_ms}
+    static func speak(_ host: LocalHost, text raw: String, voiceID: String, prev: String? = nil, next: String? = nil) async throws -> [String: Any] {
+        let plain = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !plain.isEmpty else { throw Fail(kind: "bad_request") }
+        guard let k = key(host) else { throw Fail(kind: "no_key") }
+        let text = tagRE.firstMatch(in: plain, range: NSRange(location: 0, length: (plain as NSString).length)) == nil ? defaultTag + plain : plain
+        let fp = sha("\(noteModel)\n\(voiceID)\n\(text)")
+        var cache = host.store.read("voice-cache.json") as? [String: [String: Any]] ?? [:]
+        if let hit = cache[fp], let id = hit["id"] as? String, FileManager.default.fileExists(atPath: host.store.fileURL("voice-\(id).mp3").path) {
+            return hit
+        }
+        let mp3 = try await ElevenLabs(key: k).synth(text, voiceID: voiceID, prev: prev, next: next)
+        let id = UUID().uuidString.lowercased()
+        host.store.saveFile(mp3, name: "voice-\(id).mp3")
+        let clip: [String: Any] = ["id": id, "duration_ms": mp3.count * 8 / 128]       // 128kbps 估时长，够气泡上显示用
+        cache[fp] = clip
+        host.store.write("voice-cache.json", cache)
+        return clip
+    }
+
+    /// 念给我听：它那条消息的第几个气泡
+    private static func speakMessage(_ host: LocalHost, _ mid: Int, index: Int) async -> LocalResponse {
+        guard let (conv, i) = host.store.locate(message: mid) else { return .error(400, String(localized: "只能念它说的话")) }
+        let m = host.store.messages(conv)[i]
+        guard (m["role"] as? String) == "assistant", let comp = host.companion(ofConversation: conv) else {
+            return .error(400, String(localized: "只能念它说的话"))
+        }
+        let settings = comp["settings"] as? [String: Any] ?? [:]
+        let bubbles = Bubbles.split(m["text"] as? String ?? "", cap: settings["max_bubbles"] as? Int ?? 6,
+                                    offline: settings["long_mode"] as? Bool ?? false)
+        guard bubbles.indices.contains(index) else { return .error(400, String(localized: "没有这一条")) }
+        let b = bubbles[index]
+        do {
+            let clip = try await speak(host, text: isVoice(b) ? body(b) : b, voiceID: voiceID(settings))
+            return .json(clip)
+        } catch let f as Fail { return err(f.kind) } catch { return err("network") }
+    }
+
+    /// 写进系统提示的那几句：有 key、没关、不是无痕才给
+    static func modeLines(_ settings: [String: Any], hasKey: Bool, zh: Bool) -> String {
+        let mode = settings["voice_mode"] as? String ?? "sometimes"
+        guard hasKey, mode != "off" else { return "" }
+        let example = zh ? "🎤 [soft, a little tired] 晚安…早点睡，明天见。" : "🎤 [soft, a little tired] Goodnight… sleep well, see you tomorrow."
+        let lead: String
+        if zh {
+            lead = mode == "often" ? "你喜欢让 TA 听见你的声音，想说出声的时候就发语音条。" : "有些话用说的更好——晚安、安慰、笑出声、想 TA 的时候，就发语音条。"
+        } else {
+            lead = mode == "often" ? "You like letting them hear your voice: whenever you want to say something out loud, send a voice note."
+                                   : "Some things land better said out loud — goodnights, comfort, a laugh, missing them — so send a voice note."
+        }
+        let how = zh ? """
+            格式就是单独一段、以 🎤 开头，后面直接写要说出口的话，比如：
+            \(example)
+            这一段会念成你的语音条，TA 看到的逐字稿里没有标签。
+            怎么写：
+            - 🎤 那段是要念出来的稿子：写说出口的话，语言跟着你们聊天的语言走。
+            - 音频标签写成一小段描述，几个词说清嗓子怎么动：[low and close, unhurried]、[quiet laugh under the breath]、[soft, a little tired]。单写一个 [whispers] 会整段变成气声，想贴近说话用 [low, close]。
+            - 声口变了才写一个标签，往轻里写。
+            - 停顿靠 …、换行和 —；逗号句号停不住。
+            - 喘放进标点里：句首句尾留 …、话说一半断一下，一段两三处就够，每处换一种。
+            - 压低、凑近、放慢，比用力好听：[groans] 和带火气的词（angry、growl、intense、rough）会念成发火，用温和的词代替。
+            - 写配音演员一读就知道嗓子怎么动的词，比喻和画面留给文字。
+            - 拟声字（Mwah、啵）会被当成字念出来，用说的话代替。
+            """ : """
+            The format is its own paragraph starting with 🎤, followed by the words you'll say, e.g.:
+            \(example)
+            That paragraph becomes your voice note; the transcript they see has no tags.
+            How to write it:
+            - The 🎤 paragraph is a script to be spoken: write words meant to be said, in the language you two are talking in.
+            - Write audio tags as a short description — a few words on what the voice does: [low and close, unhurried], [quiet laugh under the breath], [soft, a little tired]. A bare [whispers] turns the whole thing breathy; for speaking close, use [low, close].
+            - Add a tag only when the delivery changes, and keep it light.
+            - Pauses come from …, line breaks and —; commas and full stops don't hold.
+            - Put breath in the punctuation: a … at the start or end, a sentence breaking off halfway — two or three per paragraph, each one different.
+            - Lower, closer and slower sound better than forceful: [groans] and heated words (angry, growl, intense, rough) come out as anger, so use gentle words instead.
+            - Use words a voice actor would know how to perform; save metaphors and imagery for text.
+            - Sound words (Mwah and the like) get read out as words — say it in words instead.
+            """
+        return lead + "\n" + how
+    }
+
+    // MARK: TA 发语音
+
+    private static func receive(_ host: LocalHost, conversation conv: String, _ r: LocalRequest) async -> LocalResponse {
+        guard let file = r.form.files["audio"]?.first, !file.data.isEmpty else { return err("bad_request") }
+        let secondsHint = Double(r.form.fields["seconds"] ?? "") ?? 0
+        guard file.data.count <= 8 * 1024 * 1024, secondsHint <= 125 else { return err("too_long") }
+        guard let k = key(host) else { return err("no_key") }
+        let zh = ((host.companion(ofConversation: conv)?["settings"] as? [String: Any])?["lang"] as? String ?? "zh") != "en"
+        var text = "", note = ""
+        var m = Measure(seconds: secondsHint, units: 0, rate: 0, pauses: 0, longest: 0, events: [])
+        if let got = try? await ElevenLabs(key: k).transcribe(file.data) {
+            text = got.text.replacingOccurrences(of: #"\s*[(\[][^)\]]{1,30}[)\]]\s*"#, with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            m = measure(got.words, secondsHint: secondsHint)
+            let samples = host.store.read("voice-baseline.json") as? [[String: Double]] ?? []
+            note = describe(m, samples: samples, zh: zh)
+            if m.units >= 4 {
+                host.store.write("voice-baseline.json", Array((samples + [["rate": m.rate, "pause_per_min": m.pausePerMin]]).suffix(20)))
+            }
+        } else {
+            note = describe(m, samples: [], zh: zh)
+        }
+        if text.isEmpty { text = zh ? "（语音没转出文字）" : "(couldn't transcribe the voice message)" }
+        let secs = max(1, Int((m.seconds > 0 ? m.seconds : secondsHint).rounded()))
+        let id = UUID().uuidString.lowercased()
+        host.store.saveFile(file.data, name: "att-\(id)")
+        var all = host.store.collection("attachments")
+        all.append(["id": id, "conversation": conv, "kind": "voice", "name": "voice-\(secs)s.m4a", "mime": "audio/mp4",
+                    "size": file.data.count, "seconds": secs, "caption": note])
+        host.store.saveCollection("attachments", all)
+        return .json(["attachment": host.attachmentPublic(id) ?? [:], "text": text], status: 201)
+    }
+
+    struct Measure {
+        var seconds: Double, units: Double, rate: Double, pauses: Int, longest: Double, events: [String]
+        var pausePerMin: Double { Double(pauses) / max(seconds / 60, 0.25) }
+    }
+
+    private static func units(_ s: String) -> Double {
+        let cjk = s.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
+        let words = s.split(whereSeparator: { !($0.isLetter && $0.isASCII) && $0 != "'" }).count
+        return Double(cjk + words * 2)
+    }
+
+    static func measure(_ words: [[String: Any]], secondsHint: Double) -> Measure {
+        func num(_ v: Any?) -> Double { (v as? Double) ?? Double(v as? Int ?? 0) }
+        let spoken = words.filter { ($0["type"] as? String) == "word" }
+        let events = words.filter { ($0["type"] as? String) == "audio_event" }.map { $0["text"] as? String ?? "" }
+        let talk = spoken.isEmpty ? max(secondsHint, 0.3) : max(num(spoken.last?["end"]) - num(spoken.first?["start"]), 0.3)
+        let gaps = zip(spoken, spoken.dropFirst()).map { num($1["start"]) - num($0["end"]) }
+        let pauses = gaps.filter { $0 >= 0.7 }
+        let u = units(spoken.map { ($0["text"] as? String ?? "") + " " }.joined())
+        let total = max(secondsHint, num(words.last?["end"]), talk)
+        return Measure(seconds: (total * 10).rounded() / 10, units: u, rate: u > 0 ? u / talk : 0, pauses: pauses.count,
+                       longest: ((pauses.max() ?? 0) * 10).rounded() / 10, events: events)
+    }
+
+    private static let eventWords: [(String, String, String)] = [
+        ("laugh", "笑了一下", "laughed"), ("chuckle", "轻笑了一下", "chuckled"), ("giggle", "咯咯笑了", "giggled"),
+        ("sigh", "叹了口气", "sighed"), ("cry", "带着哭腔", "sounded tearful"), ("sob", "抽泣", "sobbed"),
+        ("sniff", "吸了吸鼻子", "sniffed"), ("cough", "咳了一声", "coughed"), ("yawn", "打了个哈欠", "yawned"),
+        ("breath", "深吸了一口气", "took a deep breath")]
+
+    private static func median(_ xs: [Double]) -> Double {
+        let s = xs.sorted()
+        guard !s.isEmpty else { return 0 }
+        return s.count % 2 == 1 ? s[s.count / 2] : (s[s.count / 2 - 1] + s[s.count / 2]) / 2
+    }
+
+    /// 只写听到的事实，不替 TA 下结论；攒够 5 条才跟 TA 自己比
+    static func describe(_ m: Measure, samples: [[String: Double]], zh: Bool) -> String {
+        var bits: [String] = []
+        let mine = samples.count >= 5
+        if m.units >= 4 && m.rate > 0 {
+            if mine {
+                let base = median(samples.compactMap { $0["rate"] })
+                let r = base > 0 ? m.rate / base : 1
+                if r <= 0.8 { bits.append(zh ? "说得比你平时慢不少" : "much slower than you usually talk") }
+                else if r <= 0.9 { bits.append(zh ? "比平时慢一点" : "a bit slower than usual") }
+                else if r >= 1.25 { bits.append(zh ? "说得比你平时快不少" : "much faster than you usually talk") }
+                else if r >= 1.1 { bits.append(zh ? "比平时快一点" : "a bit faster than usual") }
+            } else if m.rate < 3 { bits.append(zh ? "说得偏慢" : "on the slow side") }
+            else if m.rate > 6 { bits.append(zh ? "说得偏快" : "on the fast side") }
+        }
+        if m.pauses > 0 {
+            let many = mine ? m.pausePerMin >= 1.5 * max(median(samples.compactMap { $0["pause_per_min"] }), 1) : m.pauses >= 3
+            if many {
+                let lg = m.longest == m.longest.rounded() ? "\(Int(m.longest))" : "\(m.longest)"
+                bits.append(zh ? "中间停了 \(m.pauses) 次（最长 \(lg) 秒）" + (mine ? "，比平时多" : "")
+                               : "paused \(m.pauses) times (longest \(lg)s)" + (mine ? ", more than usual" : ""))
+            }
+        }
+        var heard: [String] = [], background: [String] = []
+        for e in m.events {
+            let key = e.lowercased().filter { $0.isLetter }
+            if let hit = eventWords.first(where: { key.hasPrefix($0.0) }) { heard.append(zh ? hit.1 : hit.2) }
+            else {
+                let t = e.trimmingCharacters(in: CharacterSet(charactersIn: "()[] "))
+                if !t.isEmpty { background.append(t) }
+            }
+        }
+        if !background.isEmpty {
+            var seen = Set<String>()
+            heard.append((zh ? "背景里有" : "background: ") + background.filter { seen.insert($0).inserted }.joined(separator: zh ? "、" : ", "))
+        }
+        var seen = Set<String>()
+        bits += heard.filter { seen.insert($0).inserted }
+        let secs = max(1, Int(m.seconds.rounded()))
+        let head = zh ? "语音 \(secs) 秒" : "voice message, \(secs)s"
+        if bits.isEmpty { return "〔\(head)〕" }
+        return zh ? "〔\(head)：\(bits.joined(separator: "，"))〕" : "〔\(head): \(bits.joined(separator: ", "))〕"
+    }
+}
+
+/// ElevenLabs 接头（照 server/llm/tts.py）
+struct ElevenLabs {
+    let key: String
+    private static let base = "https://api.elevenlabs.io"
+
+    func request(_ method: String, _ path: String, query: [String: String] = [:], json: [String: Any]? = nil,
+                 multipart: (fields: [String: String], file: Data)? = nil) async throws -> Data {
+        var c = URLComponents(string: Self.base + path)!
+        if !query.isEmpty { c.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) } }
+        var req = URLRequest(url: c.url!, timeoutInterval: 60)
+        req.httpMethod = method
+        req.setValue(key, forHTTPHeaderField: "xi-api-key")
+        if let json {
+            req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            req.httpBody = try JSONSerialization.data(withJSONObject: json)
+        } else if let multipart {
+            let boundary = "mele-\(UUID().uuidString)"
+            req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+            var body = Data()
+            for (k, v) in multipart.fields {
+                body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(k)\"\r\n\r\n\(v)\r\n".utf8))
+            }
+            body.append(Data("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"voice.m4a\"\r\nContent-Type: audio/mp4\r\n\r\n".utf8))
+            body.append(multipart.file)
+            body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+            req.httpBody = body
+        }
+        let data: Data, resp: URLResponse
+        do { (data, resp) = try await URLSession.shared.data(for: req) } catch { throw LocalVoice.Fail(kind: "network") }
+        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+        if status >= 400 {
+            // 只开了部分权限的 key（10-04 实测：借来的那把没有 models_read）：key 是对的，只是这一项没权限
+            if String(decoding: data, as: UTF8.self).contains("missing_permissions") { throw LocalVoice.Fail(kind: "missing_permissions") }
+            throw LocalVoice.Fail(kind: [401, 403].contains(status) ? "auth" : [402, 429].contains(status) ? "quota"
+                                        : status < 500 ? "bad_request" : "server")
+        }
+        return data
+    }
+
+    private func object(_ d: Data) -> [String: Any] { (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] ?? [:] }
+
+    func synth(_ text: String, voiceID: String, prev: String?, next: String?) async throws -> Data {
+        var body: [String: Any] = ["text": text, "model_id": LocalVoice.noteModel, "voice_settings": ["stability": 0.5]]
+        if let prev, !prev.isEmpty { body["previous_text"] = prev }
+        if let next, !next.isEmpty { body["next_text"] = next }
+        return try await request("POST", "/v1/text-to-speech/\(voiceID)", query: ["output_format": "mp3_44100_128"], json: body)
+    }
+
+    func design(_ description: String) async throws -> [[String: Any]] {
+        let d = object(try await request("POST", "/v1/text-to-voice/design",
+                                         json: ["voice_description": description, "model_id": "eleven_ttv_v3", "auto_generate_text": true]))
+        return (d["previews"] as? [[String: Any]] ?? []).map {
+            ["generated_voice_id": $0["generated_voice_id"] ?? "", "audio_base_64": $0["audio_base_64"] ?? "",
+             "duration_secs": $0["duration_secs"] ?? 0]
+        }
+    }
+
+    func saveDesign(name: String, description: String, generated: String) async throws -> String {
+        let d = object(try await request("POST", "/v1/text-to-voice",
+                                         json: ["voice_name": name, "voice_description": description, "generated_voice_id": generated]))
+        guard let id = d["voice_id"] as? String else { throw LocalVoice.Fail(kind: "server") }
+        return id
+    }
+
+    func slots() async throws -> (Int, Int) {
+        let d = object(try await request("GET", "/v1/user/subscription"))
+        return (d["voice_slots_used"] as? Int ?? 0, d["voice_limit"] as? Int ?? 0)
+    }
+
+    func transcribe(_ audio: Data) async throws -> (text: String, words: [[String: Any]]) {
+        let d = object(try await request("POST", "/v1/speech-to-text",
+                                         multipart: (["model_id": "scribe_v2", "tag_audio_events": "true",
+                                                      "timestamps_granularity": "word"], audio)))
+        return (d["text"] as? String ?? "", d["words"] as? [[String: Any]] ?? [])
+    }
+}
+#endif

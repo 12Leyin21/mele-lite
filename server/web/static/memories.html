@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>她记了什么</title>
+<style>
+:root{--bg:#f6f3ee;--panel:#fffdf9;--ink:#2b2622;--muted:#8a8078;--line:#e6dfd6;--accent:#c96f4a;--card:#f1ebe3;--hid:#7a6fb0}
+@media (prefers-color-scheme:dark){:root{--bg:#171513;--panel:#1f1c19;--ink:#ece6df;--muted:#9a9088;--line:#322d28;--accent:#e08a63;--card:#2a2622;--hid:#a99ce0}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,"PingFang SC","Helvetica Neue",sans-serif}
+header{position:sticky;top:0;background:var(--bg);padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+header b{font-size:17px}header span{color:var(--muted);font-size:13px}
+button{border:0;border-radius:10px;padding:6px 12px;background:var(--accent);color:#fff;font:inherit;font-size:13px;cursor:pointer}
+main{max-width:760px;margin:0 auto;padding:8px 16px 40px}
+h2{font-size:14px;margin:22px 0 8px;display:flex;align-items:baseline;gap:8px}h2 small{color:var(--muted);font-weight:400}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:6px 0;display:flex;gap:10px}
+.item .body{flex:1;min-width:0}.item .text{white-space:pre-wrap;word-break:break-word}
+.meta{color:var(--muted);font-size:12px;margin-top:3px}
+.tag{display:inline-block;font-size:11px;border-radius:999px;padding:1px 8px;margin-right:6px;background:var(--card);color:var(--muted)}
+.tag.about{background:color-mix(in srgb,var(--hid) 18%,transparent);color:var(--hid)}
+.x{background:none;color:var(--muted);padding:0 4px;font-size:16px;align-self:flex-start}.x:hover{color:var(--accent)}
+pre{white-space:pre-wrap;word-break:break-word;font:13px/1.5 ui-monospace,Menlo,monospace;background:var(--card);border-radius:10px;padding:10px;margin:0}
+.empty{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header><b>她记了什么</b><span id="count"></span><button id="reload" style="margin-left:auto">刷新</button></header>
+<main>
+  <h2>记忆 <small>一年后还想记得的事（TA 在 app 里看得到）</small></h2><div id="memory"></div>
+  <h2>关于 TA <small>日常小事，悄悄记的（TA 看不到，只有这个调试页能看）</small></h2><div id="about"></div>
+  <h2>钉住的核心 <small>每轮都在</small></h2><div id="core"></div>
+  <h2>人物卡</h2><div id="people"></div>
+  <h2>便利贴 <small>她留给下一轮自己的</small></h2><pre id="sticky"></pre>
+  <h2>账本 <small>卷走的旧对话</small></h2><pre id="ledger"></pre>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const when = s => s ? new Date(s).toLocaleString("zh-CN", {month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"}) : "";
+function row(text, meta, kind, id) {
+  const item = el("div", "item"), body = el("div", "body");
+  body.append(el("div", "text", text));
+  const m = el("div", "meta");
+  if (kind) m.append(el("span", "tag " + kind, kind === "about" ? "关于 TA" : kind === "core" ? "核心" : kind === "person" ? "人物卡" : "记忆"));
+  m.append(document.createTextNode(meta)); body.append(m); item.append(body);
+  if (id != null) {
+    const x = el("button", "x", "✕"); x.title = "删掉这条";
+    x.onclick = async () => { if (!confirm("删掉这条？删了就没了。")) return; await fetch(`/api/memories/${id}`, {method: "DELETE"}); load(); };
+    item.append(x);
+  }
+  return item;
+}
+function fill(box, rows) { box.innerHTML = ""; if (!rows.length) box.append(el("div", "empty", "（还没有）")); rows.forEach(r => box.append(r)); }
+async function load() {
+  const d = await (await fetch("/api/memories")).json();
+  const meta = m => `重要性 ${m.importance} · ${when(m.created_at)} 记的` + (m.recall_count ? ` · 想起过 ${m.recall_count} 次` : "") +
+    (m.updated_at && m.updated_at !== m.created_at ? ` · ${when(m.updated_at)} 改过` : "") + (m.tags.length ? ` · ${m.tags.join("、")}` : "");
+  for (const kind of ["memory", "about", "core"])
+    fill($(kind), d.memories.filter(m => m.kind === kind).map(m => row(m.content, meta(m), kind, m.id)));
+  fill($("people"), d.people.map(p => row(
+    [p.name + (p.aliases.filter(a => a !== p.name).length ? `（也叫 ${p.aliases.filter(a => a !== p.name).join(" / ")}）` : ""),
+     p.relation && "是谁：" + p.relation, p.content && "要记得：" + p.content, p.impression && "它的印象：" + p.impression].filter(Boolean).join("\n"),
+    `${p.created_by === "ai" ? "它建的" : "你建的"} · ${when(p.updated_at)} 改过`, "person", p.id)));
+  $("sticky").textContent = d.sticky || "（空）";
+  $("ledger").textContent = d.ledger.map(x => `## ${x.day}\n${x.text}`).join("\n\n") || "（还没有）";
+  const n = k => d.memories.filter(m => m.kind === k).length;
+  $("count").textContent = `记忆 ${n("memory")} · 关于 TA ${n("about")} · 核心 ${n("core")} · 人物卡 ${d.people.length}`;
+}
+$("reload").onclick = load;
+load();
+</script>
+</body>
+</html>
