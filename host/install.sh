@@ -4,6 +4,10 @@
 # 可选：MELE_DOMAIN=你的域名（先把域名解析到这台服务器）；不填就用 sslip.io。
 set -euo pipefail
 
+# 整个包进函数、最后才调用（10-05）：`curl | bash` 是边下边读的，中间 docker compose exec 会把没读到的后半截脚本
+# 当输入吃掉，模型下完脚本就悄悄结束了。包起来 = bash 先读完全文再跑。（函数体不缩进：里面的 heredoc 结束标记要顶格）
+main() {
+
 DIR=/opt/mele-host
 RAW=${MELE_RAW:-https://raw.githubusercontent.com/12Leyin21/mele-lite/main/host}
 
@@ -58,7 +62,7 @@ docker compose pull --ignore-pull-failures
 docker compose up -d
 
 say "下载记忆模型（约 2.3GB，只这一次）"
-docker compose exec -T mele python -m api.host warm
+docker compose exec -T mele python -m api.host warm </dev/null
 
 say "等 HTTPS 证书"
 for _ in $(seq 1 60); do
@@ -67,7 +71,7 @@ for _ in $(seq 1 60); do
 done
 curl -fsS "https://$MELE_DOMAIN/version" >/dev/null || die "https://$MELE_DOMAIN 连不上：检查防火墙 80 / 443 端口有没有开"
 
-mele-host pair
+mele-host pair </dev/null
 
 cat <<DONE
 
@@ -79,3 +83,6 @@ cat <<DONE
 
 常用：mele-host pair（重新配对）· mele-host update（升级）· mele-host logs（看日志）
 DONE
+}
+
+main "$@"
