@@ -8,7 +8,7 @@ import MeleLiteCore
 ///   「TA 常听谁」读手机音乐资料库的播放次数，放歌 / 在听什么走系统播放器。
 /// - 每日私选：服务器是早上醒来推；Lite 没有一直醒着的东西，改成**过了推歌时间、第一次打开 App 时**推。
 ///   程序先找真歌（种子歌手的热门 + 模型报的风格相近的歌手，曲库搜得到才算），它只从池子里挑，挑完发进聊天（带歌卡）。
-/// - 〔在听〕只给歌名和歌手。服务器那版的「耳朵」（量节奏、真听一遍）和歌词这里都没有：歌词要有授权的来源才能上架。
+/// - 〔在听〕给歌名和歌手；开了歌词（默认关，10-05 夜）再给此刻唱到的两句。服务器那版的「耳朵」（量节奏、真听一遍）这里没有。
 enum LocalMusic {
     static let poolLimit = 30
     static let perArtist = 3
@@ -45,7 +45,9 @@ enum LocalMusic {
                 guard at.isEmpty || parseHM(at) != nil else { return .error(400, String(localized: "时间写成 HH:MM")) }
                 l["picks_at"] = at
             }
+            if let on = r.json["lyrics"] as? Bool { l["lyrics"] = on }
             s.write("music-link.json", l)
+            if r.json["lyrics"] as? Bool == true, let d = s.read("music-now.json") as? [String: Any] { fetchLyrics(s, d) }   // 开了就把正在放的那首先拿上
             return .json(view(s))
         case ("DELETE", "me", 2) where p[1] == "music":
             try? FileManager.default.removeItem(at: s.root.appendingPathComponent("music-link.json"))
@@ -65,9 +67,14 @@ enum LocalMusic {
         case ("POST", "music", 2) where p[1] == "now":
             let name = (r.json["name"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { return .error(400, String(localized: "歌名是空的")) }
-            s.write("music-now.json", ["song_id": r.json["song_id"] as? String ?? "", "name": String(name.prefix(200)),
-                                       "artist": String((r.json["artist"] as? String ?? "").prefix(200)),
-                                       "playing": r.json["playing"] as? Bool ?? false, "at": LocalStore.iso(Date())])
+            var now: [String: Any] = ["song_id": r.json["song_id"] as? String ?? "", "name": String(name.prefix(200)),
+                                      "artist": String((r.json["artist"] as? String ?? "").prefix(200)),
+                                      "playing": r.json["playing"] as? Bool ?? false, "at": LocalStore.iso(Date())]
+            // 放到第几秒、整首多长（10-05 夜：歌词跟着唱到哪一句）
+            if let pos = r.json["position_s"] as? Double, pos >= 0, pos < 36_000 { now["position_s"] = pos }
+            if let dur = r.json["duration_s"] as? Double, dur > 0, dur < 36_000 { now["duration_s"] = dur }
+            s.write("music-now.json", now)
+            if now["playing"] as? Bool == true { fetchLyrics(s, now) }
             return .empty
         case ("GET", "music", 3) where p[1] == "song": return .needsHost       // 歌卡已经带全了，不会走到这
         default: return nil
@@ -83,7 +90,8 @@ enum LocalMusic {
         guard let l = link(s) else { return ["platform": NSNull(), "linked": false, "storefront": "", "picks_n": 0, "picks_at": ""] }
         let apple = (l["platform"] as? String) == "apple"
         return ["platform": l["platform"] ?? NSNull(), "linked": apple && MPMediaLibrary.authorizationStatus() == .authorized,
-                "storefront": l["storefront"] ?? "", "picks_n": l["picks_n"] ?? picksDefault, "picks_at": l["picks_at"] ?? ""]
+                "storefront": l["storefront"] ?? "", "picks_n": l["picks_n"] ?? picksDefault, "picks_at": l["picks_at"] ?? "",
+                "lyrics": l["lyrics"] as? Bool ?? false]
     }
 
     static func storefront(_ s: LocalStore) -> String {
@@ -105,9 +113,118 @@ enum LocalMusic {
         guard Date().timeIntervalSince(at) <= nowFresh, let name = d["name"] as? String, !name.isEmpty else { return "" }
         let artist = d["artist"] as? String ?? ""
         let song = zh ? "《\(name)》" + (artist.isEmpty ? "" : "- \(artist)") : "\"\(name)\"" + (artist.isEmpty ? "" : " by \(artist)")
-        if d["playing"] as? Bool ?? false { return zh ? "〔在听〕TA 在听\(song)。" : "〔Listening〕They're listening to \(song)." }
+        if d["playing"] as? Bool ?? false {
+            let pair = lyricPair(s, d)
+            if !pair.isEmpty {                       // 开了歌词：唱到的那句和它前一句（照服务器 ears._lyric_pair）
+                return zh ? "〔在听〕TA 在听\(song)，此刻唱到：\n" + pair.joined(separator: "\n")
+                          : "〔Listening〕They're listening to \(song), right now at:\n" + pair.joined(separator: "\n")
+            }
+            return zh ? "〔在听〕TA 在听\(song)。" : "〔Listening〕They're listening to \(song)."
+        }
         let mins = max(1, Int(Date().timeIntervalSince(at) / 60))
         return zh ? "〔在听〕TA 刚才在听\(song)（\(mins) 分钟前）。" : "〔Listening〕They were listening to \(song) (\(mins) min ago)."
+    }
+
+    // MARK: - 歌词（10-05 夜Tilia：Lite 也要；照 server/music/ears.py 的 lrclib）
+    // 默认关，TA 在音乐设置里自己开。开了：手机直接问 lrclib（大家共建的歌词库，不要钥匙）拿带时间轴的词，
+    // 按系统播放器报的「放到第几秒」+ 报完过了多久，算出此刻唱到哪两句。只对苹果「音乐」App 有效（别的 App 读不到）。
+
+    static let lrclib = "https://lrclib.net/api"
+    static let endSlack = 5.0                  // 位置超过时长 5 秒 = 这首已经放完了
+    static let lyricsKeep = 40
+    static let retryAfter: TimeInterval = 86_400   // 没找到的歌一天后再试
+    nonisolated(unsafe) private static var fetching: Set<String> = []
+    private static let fetchLock = NSLock()
+
+    static func lyricsOn(_ s: LocalStore) -> Bool { link(s)?["lyrics"] as? Bool ?? false }
+
+    private static func lyricsKey(_ d: [String: Any]) -> String {
+        let id = d["song_id"] as? String ?? ""
+        return id.isEmpty ? "name:\(d["name"] ?? "")|\(d["artist"] ?? "")" : id
+    }
+
+    /// 「[01:02.30] 一句」→ [(62.3, "一句")]，按时间排；一行多个时间戳各算一次；空词跳过
+    static func parseLRC(_ text: String) -> [(Double, String)] {
+        let re = try! NSRegularExpression(pattern: #"\[(\d+):(\d+(?:\.\d+)?)\]"#)
+        var out: [(Double, String)] = []
+        for raw in text.components(separatedBy: .newlines) {
+            let ns = raw as NSString
+            let ms = re.matches(in: raw, range: NSRange(location: 0, length: ns.length))
+            let line = re.stringByReplacingMatches(in: raw, range: NSRange(location: 0, length: ns.length), withTemplate: "")
+                .trimmingCharacters(in: .whitespaces)
+            guard !ms.isEmpty, !line.isEmpty else { continue }
+            for m in ms {
+                let t = (Double(ns.substring(with: m.range(at: 1))) ?? 0) * 60 + (Double(ns.substring(with: m.range(at: 2))) ?? 0)
+                out.append(((t * 100).rounded() / 100, line))
+            }
+        }
+        return out.sorted { $0.0 < $1.0 }
+    }
+
+    /// 唱到的那句和它前一句；还没到第一句 = []
+    static func pair(_ lyrics: [(Double, String)], at pos: Double) -> [String] {
+        guard let idx = lyrics.lastIndex(where: { $0.0 <= pos }) else { return [] }
+        return idx > 0 ? [lyrics[idx - 1].1, lyrics[idx].1] : [lyrics[idx].1]
+    }
+
+    private static func lyricPair(_ s: LocalStore, _ d: [String: Any]) -> [String] {
+        guard lyricsOn(s), let pos0 = d["position_s"] as? Double,
+              let hit = (s.read("music-lyrics.json") as? [String: [String: Any]])?[lyricsKey(d)],
+              let rows = hit["lines"] as? [[Any]], !rows.isEmpty else { return [] }
+        let lyrics = rows.compactMap { r -> (Double, String)? in
+            guard r.count == 2, let t = (r[0] as? Double) ?? (r[0] as? Int).map(Double.init), let l = r[1] as? String else { return nil }
+            return (t, l)
+        }
+        let pos = pos0 + Date().timeIntervalSince(LocalStore.date(d["at"]))
+        if let dur = d["duration_s"] as? Double, pos > dur + endSlack { return [] }
+        return pair(lyrics, at: pos)
+    }
+
+    /// 开着歌词、在放、这首还没拿过（或者一天前没找到）：后台去 lrclib 拿，存进 music-lyrics.json（最多留 40 首）
+    static func fetchLyrics(_ s: LocalStore, _ d: [String: Any]) {
+        guard lyricsOn(s), let name = d["name"] as? String, !name.isEmpty else { return }
+        let key = lyricsKey(d)
+        if let old = (s.read("music-lyrics.json") as? [String: [String: Any]])?[key],
+           !((old["lines"] as? [Any])?.isEmpty ?? true) || Date().timeIntervalSince(LocalStore.date(old["at"])) < retryAfter { return }
+        guard fetchLock.withLock({ fetching.insert(key).inserted }) else { return }
+        let artist = d["artist"] as? String ?? ""
+        let dur = Int((d["duration_s"] as? Double ?? 0).rounded())
+        Task {
+            defer { _ = fetchLock.withLock { fetching.remove(key) } }
+            let lyrics = await lrclibFetch(name: name, artist: artist, duration: dur)
+            var all = s.read("music-lyrics.json") as? [String: [String: Any]] ?? [:]
+            all[key] = ["lines": lyrics.map { [$0.0, $0.1] as [Any] }, "at": LocalStore.iso(Date())]
+            if all.count > lyricsKeep {
+                for k in all.keys.sorted(by: { LocalStore.date(all[$0]?["at"]) < LocalStore.date(all[$1]?["at"]) }).prefix(all.count - lyricsKeep) {
+                    all[k] = nil
+                }
+            }
+            s.write("music-lyrics.json", all)
+        }
+    }
+
+    /// 先精确取，再搜索（时长差 3 秒以内、有带时间的词）。都没有 = []
+    static func lrclibFetch(name: String, artist: String, duration: Int) async -> [(Double, String)] {
+        func get(_ path: String, _ q: [String: String]) async -> Any? {
+            var c = URLComponents(string: "\(lrclib)/\(path)")!
+            c.queryItems = q.map { URLQueryItem(name: $0.key, value: $0.value) }
+            guard let url = c.url else { return nil }
+            var req = URLRequest(url: url, timeoutInterval: 10)
+            req.setValue("Mele Lite (https://github.com/12Leyin21/mele-lite)", forHTTPHeaderField: "User-Agent")
+            guard let (data, resp) = try? await URLSession.shared.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+            return try? JSONSerialization.jsonObject(with: data)
+        }
+        var q = ["track_name": name, "artist_name": artist]
+        if duration > 0 { q["duration"] = String(duration) }
+        if let hit = await get("get", q) as? [String: Any], let lrc = hit["syncedLyrics"] as? String, !lrc.isEmpty {
+            return parseLRC(lrc)
+        }
+        for hit in await get("search", ["track_name": name, "artist_name": artist]) as? [[String: Any]] ?? [] {
+            guard let lrc = hit["syncedLyrics"] as? String, !lrc.isEmpty else { continue }
+            if duration > 0, abs((hit["duration"] as? Double ?? 0) - Double(duration)) > 3 { continue }
+            return parseLRC(lrc)
+        }
+        return []
     }
 
     // MARK: - 曲库（iTunes 搜索接口）

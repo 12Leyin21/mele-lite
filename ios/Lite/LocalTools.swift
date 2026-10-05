@@ -37,6 +37,7 @@ enum LocalTools {
             LocalBooks.toolSpec,
             LocalTarot.toolSpec(zh: zh),
             LocalMusic.toolSpec(zh: zh),
+            LocalFocus.toolSpec(zh: zh),
         ].filter { !hiding.contains($0.name) }
     }
 
@@ -133,6 +134,7 @@ enum LocalTools {
         case "book": return LocalBooks.runTool(a, host: host, companion: companion)
         case "tarot": return LocalTarot.runTool(a, host: host, companion: companion, zh: zh)
         case "music": return await LocalMusic.runTool(a, host: host, zh: zh)
+        case "offer_focus": return LocalFocus.runTool(a, zh: zh)
         default:
             return Outcome(result: "没有这个工具：\(call.name)", card: nil)
         }

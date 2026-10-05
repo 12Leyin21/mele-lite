@@ -137,12 +137,13 @@ struct MusicRoomView: View {
                 .padding(.vertical, 12)
                 Divider()
                 PicksTimeRow(value: music.link?.picks_at ?? "") { at in Task { await music.setPicks(at: at) } }
-                if Lite.hosted {        // 歌词（10-05 Tilia）：Host 默认不拿，主人自己开
+                if Lite.on {            // 歌词（10-05 Tilia）：默认不拿，自己开；Host 和本机（10-05 夜）都有
                     Divider()
                     Toggle(isOn: Binding(get: { music.link?.lyrics ?? false }, set: { on in Task { await music.setLyrics(on) } })) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("歌词").font(Typo.sans(Typo.Size.body)).foregroundStyle(theme.ink)
-                            Text("打开后，你的 Host 会去 lrclib（大家共建的歌词库）拿歌词，\(aiName) 能跟着你听到哪一句。只管以后新听的歌。")
+                            Text(Lite.hosted ? String(localized: "打开后，你的 Host 会去 lrclib（大家共建的歌词库）拿歌词，\(aiName) 能跟着你听到哪一句。只管以后新听的歌。")
+                                 : String(localized: "打开后，手机会去 lrclib（大家共建的歌词库）拿你正在放的歌的歌词，\(aiName) 能跟着你听到哪一句。只对苹果自带的「音乐」App 有效。"))
                                 .font(Typo.sans(Typo.Size.caption)).foregroundStyle(theme.inkFaint)
                         }
                     }

@@ -82,7 +82,8 @@ final class ContextReporter: NSObject, ObservableObject, CLLocationManagerDelega
             if onlyPlaying && !playing { return }
             Task { try? await api?.send("POST", "music/now", json: ["song_id": it.playbackStoreID, "name": title,
                                                                       "artist": it.artist ?? "", "playing": playing,
-                                                                      "position_s": p.currentPlaybackTime]) }
+                                                                      "position_s": p.currentPlaybackTime,
+                                                                      "duration_s": it.playbackDuration]) }
             return
         }
         guard MusicAuthorization.currentStatus == .authorized, MusicStore.shared.appleLinked,

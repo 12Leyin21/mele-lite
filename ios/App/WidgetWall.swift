@@ -25,10 +25,10 @@ enum WidgetKind: String, Codable, CaseIterable, Identifiable {
     var takesPhoto: Bool { self == .photo || self == .polaroid }
     /// 自己就是一张卡、外面不再套卡底的
     var bare: Bool { self == .chat || self == .pegboard || self == .polaroid || self == .starmap }
-    /// Lite 没有服务器：自唤醒（它自己醒来）和专注（屏幕使用时间）不给加
+    /// Lite 本机没有服务器：自唤醒（它自己醒来）不给加；专注 10-05 夜起 Lite 两边都有
     static var available: [WidgetKind] {
-        Lite.local ? allCases.filter { $0 != .wakes && $0 != .focus }
-            : Lite.hosted ? allCases.filter { $0 != .focus }           // 连着 Host 有自唤醒；专注要屏幕使用时间，Lite 没带
+        Lite.local ? allCases.filter { $0 != .wakes }
+            : Lite.hosted ? allCases
             : allCases.filter { $0 != .starmap }
     }
     var title: String {

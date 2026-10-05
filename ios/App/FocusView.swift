@@ -1,6 +1,7 @@
 import DeviceActivity
 import FamilyControls
 import SwiftUI
+import UserNotifications
 import WidgetKit
 
 // MARK: - 哨兵 · 主 app 这一半（09-29，设计 specs/2026-09-29-ios-focus-sentinel-design.md）
@@ -51,6 +52,8 @@ final class FocusStore: ObservableObject {
                lockNow: Bool, allowLumiLock: Bool) async {
         do {
             try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+            // 提醒是插件弹的本机通知：Lite 本机模式启动时不要通知权限，这里补要一次（给过 / 拒过都不会再弹）
+            _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
             struct Out: Decodable {
                 let id: String; let lines: [String]; let lockAfter: Int; let peekLine: String
                 enum CodingKeys: String, CodingKey { case id, lines; case lockAfter = "lock_after"; case peekLine = "peek_line" }

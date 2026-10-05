@@ -247,7 +247,7 @@ final class LocalBrain: @unchecked Sendable {
         // 小号不给：那是平常的你在读 / 在听 / 刚抽的牌
         let cidNow = comp["id"] as? String ?? ""
         for line in altInfo != nil ? [] : [LocalBooks.readingLine(host.store, zh: zh), LocalTarot.pendingNote(host.store, companion: cidNow, zh: zh),
-                     LocalMusic.nowLine(host.store, zh: zh)] where !line.isEmpty {
+                     LocalMusic.nowLine(host.store, zh: zh), LocalFocus.pendingNote(host.store, conversation: conv, zh: zh)] where !line.isEmpty {
             req.context += "\n\n" + line
         }
         // 〔TA 那边〕天气 / 在哪 / 日程 / 步数和睡眠（10-04）：小号不给（那是平常的你那边）

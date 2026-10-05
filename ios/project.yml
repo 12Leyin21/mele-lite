@@ -34,6 +34,9 @@ targets:
     dependencies:
       - package: MeleLiteParts
         product: MeleLiteCore
+      - target: FocusMonitor
+      - target: FocusShield
+      - target: FocusShieldAction
     info:
       path: Lite/Info.plist
       properties:
@@ -68,6 +71,8 @@ targets:
         com.apple.developer.weatherkit: true
         # Mele Host 推送（10-04）：经中转站来的推送；通知扩展跟 App 共用一个 App Group 拿解密钥匙
         aps-environment: development
+        # 专注（10-05 夜）：屏幕使用时间 + 跟三个插件共享「这次专注」（chat.mele.app 的发布版权限已批）
+        com.apple.developer.family-controls: true
         com.apple.security.application-groups: [group.chat.mele.app]
     settings:
       base:
@@ -76,3 +81,68 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) LITE"
+
+  # 专注的三个插件（屏幕使用时间）：靠 App Group 跟 App 共享「这次专注」；要苹果开 Family Controls 权限
+  FocusMonitor:
+    type: app-extension
+    platform: iOS
+    sources: [FocusMonitor, Shared, ActivityShared]
+    info:
+      path: FocusMonitor/Info.plist
+      properties:
+        CFBundleDisplayName: Mele Focus
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.deviceactivity.monitor-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).FocusMonitorExtension
+    entitlements:
+      path: FocusMonitor/FocusMonitor.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.chat.mele.app]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.melelite.FocusMonitor   # ← 跟着 App 的包名换
+        TARGETED_DEVICE_FAMILY: "1"
+  FocusShield:
+    type: app-extension
+    platform: iOS
+    sources: [FocusShield, Shared, ActivityShared]
+    info:
+      path: FocusShield/Info.plist
+      properties:
+        CFBundleDisplayName: Mele Shield
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettingsUI.shield-configuration-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).FocusShieldExtension
+    entitlements:
+      path: FocusShield/FocusShield.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.chat.mele.app]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.melelite.FocusShield   # ← 跟着 App 的包名换
+        TARGETED_DEVICE_FAMILY: "1"
+  FocusShieldAction:
+    type: app-extension
+    platform: iOS
+    sources: [FocusShieldAction, Shared, ActivityShared]
+    info:
+      path: FocusShieldAction/Info.plist
+      properties:
+        CFBundleDisplayName: Mele Shield Action
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettings.shield-action-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).FocusShieldActionExtension
+    entitlements:
+      path: FocusShieldAction/FocusShieldAction.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups: [group.chat.mele.app]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.melelite.FocusShieldAction   # ← 跟着 App 的包名换
+        TARGETED_DEVICE_FAMILY: "1"

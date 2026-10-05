@@ -67,7 +67,7 @@ enum HomeApp: String, CaseIterable, Codable {
     /// 连着 Host 时先收起来的（只在手机里做的，还没搬上服务器；10-04）
     var localOnly: Bool { Lite.hosted && [.memory, .music].contains(self) }
     /// 只有 Mele 有的
-    var available: Bool { Lite.on ? (Lite.hosted ? self != .focus : ![.wakes, .focus].contains(self)) : self != .memory }
+    var available: Bool { Lite.on ? (Lite.hosted || self != .wakes) : self != .memory }
 }
 
 /// 主屏上的一格：一个软件，或者一张小组件
@@ -102,6 +102,16 @@ enum HomeLayout {
             return Saved(pages: defaults, dock: dockDefault)
         }
         s.pages = s.pages.map { $0.filter { ($0.app?.available ?? true) && ($0.widget.map { WidgetKind.available.contains($0.kind) } ?? true) } }
+        // 专注 10-05 夜才进 Lite：以前存的排法里没有，放到最后一页末尾（只补一次，TA 删了就不再补）
+        if Lite.on, !UserDefaults.standard.bool(forKey: "springboard.focusAdded") {
+            UserDefaults.standard.set(true, forKey: "springboard.focusAdded")
+            let shown = Set(s.pages.flatMap { $0.compactMap(\.app) } + s.dock)
+            if !shown.contains(.focus) {
+                if s.pages.isEmpty { s.pages = [[]] }
+                s.pages[s.pages.count - 1].append(HomeItem(app: .focus))
+                save(s)
+            }
+        }
         return s
     }
 
@@ -117,7 +127,7 @@ enum HomeLayout {
         var p2: [HomeItem] = [w(.pegboard, .large)]
         p2 += [.album, .favorites, .record, .drawer, .offline].map(a)
         var p3: [HomeItem] = [.music, .books, .tarot].map(a)
-        if Lite.on { p3.append(a(.memory)) }
+        if Lite.on { p3 += [a(.memory), a(.focus)] }
         if !Lite.on { p3 += [a(.wakes), a(.focus)] }
         return [p1, p2, p3]
     }
