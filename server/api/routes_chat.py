@@ -137,7 +137,10 @@ async def messages(conv: UUID, after: int = 0, before: int | None = None, day: s
             vs.append(c.public() if c else None)
         return texts, vs
     shaped = {m.id: with_voice(m) for m in shown}
-    out = {"messages": [{**_msg(m), "bubbles": shaped[m.id][0], "voices": shaped[m.id][1], "cards": m.cards or [],
+    def divider(m: archive.StoredMsg) -> str | None:      # 搬来的那几段：每段第一条挂的灰字行（brain/chat_import.py）
+        return next((c.get("text") for c in m.cards or [] if c.get("kind") == "divider"), None)
+    out = {"messages": [{**_msg(m), "bubbles": shaped[m.id][0], "voices": shaped[m.id][1],
+                         "cards": [c for c in m.cards or [] if c.get("kind") != "divider"], "divider": divider(m),
                          "reaction": marks.get(m.id),
                          "attachments": [f.public() for f in files.get(m.id, [])]} for m in shown],
            "busy": a.rooms.busy(conv)}

@@ -59,6 +59,10 @@ struct ChatItem: Identifiable, Hashable {
     static func rows(of m: MessageDTO) -> [ChatItem] {
         let mine = m.role == "user"
         var out: [ChatItem] = []
+        // 搬家搬来的每段开头一行灰字（10-05）：排在这条最前面（借上一条的最后一格，正常消息用不到第 64 格）
+        if let d = m.divider, !d.isEmpty {
+            out.append(ChatItem(id: m.id * slots - 1, messageID: m.id, mine: false, kind: .card("divider"), text: d, at: m.at))
+        }
         var bubbles = m.bubbles ?? [m.text]
         if mine {
             if bubbles.count > slots { bubbles = Array(bubbles.prefix(slots - 1)) + [bubbles.dropFirst(slots - 1).joined(separator: "\n")] }

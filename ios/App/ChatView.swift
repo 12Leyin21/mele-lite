@@ -131,6 +131,7 @@ struct ChatView: View {
         chat.items.filter { item in
             switch item.kind {
             case .thinking: return showThinking && !item.text.isEmpty   // 开头占位的那行不画（10-01 Tilia：还是只有三个点好看）
+            case .card("divider"): return true                         // 搬来的那几段的分隔行，跟动作卡片开关无关
             case .card, .deeds: return showActionCards
             case .text, .song, .sticker: return true
             }
@@ -879,6 +880,9 @@ struct ChatView: View {
             } else if case .deeds(let deeds) = item.kind {
                 DeedsRow(deeds: deeds, at: item.at, skin: skin)
                 Spacer(minLength: 0)
+            } else if case .card("divider") = item.kind {
+                Text(item.text).font(Typo.sans(skin.size(Typo.Size.caption))).foregroundStyle(skin.inkFaint)
+                    .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.vertical, 10)
             } else if case .card(let raw) = item.kind, raw.hasPrefix("peek") {
                 PeekNoticeRow(kind: raw, companionName: companionName, skin: skin)
             } else if case .card(let kind) = item.kind {

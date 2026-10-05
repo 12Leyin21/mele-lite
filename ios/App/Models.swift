@@ -172,8 +172,10 @@ struct MessageDTO: Decodable, Identifiable {
     var voices: [VoiceRef?]?
     /// 这一轮想了多久（毫秒，10-05）；早先的消息没有
     var thinkingMs: Int?
+    /// 搬家搬来的那段第一条上：「Claude ·《标题》· 日期」，画成一行灰字（10-05）
+    var divider: String?
     enum CodingKeys: String, CodingKey {
-        case id, role, text, thinking, at, bubbles, cards, reaction, attachments, voices
+        case id, role, text, thinking, at, bubbles, cards, reaction, attachments, voices, divider
         case thinkingMs = "thinking_ms"
     }
 }

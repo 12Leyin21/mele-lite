@@ -293,6 +293,9 @@ final class LocalBrain: @unchecked Sendable {
             req.system += "\n\n" + Monologue.rules(zh: zh, pronoun: pronoun, style: settings["thinking_style_text"] as? String ?? "")
             req.context += "\n\n" + Monologue.hook(zh: zh, pronoun: pronoun)
         }
+        // 搬家笔记（10-05，没接记忆库时从 ChatGPT / Claude 搬来的那段）：不变的，放账本前面
+        let moved = LocalImport.notesBlock(comp, zh: zh)
+        if !moved.isEmpty { req.system += "\n\n" + moved }
         // 回声账本放 system 最后（10-05 对照服务器：壹层不变的在前、账本在后），卷一次只动尾巴
         let echo = LocalEcho.render(host.store, conversation: conv, zh: zh, userName: identity.userName)
         if !echo.isEmpty { req.system += "\n\n" + echo }

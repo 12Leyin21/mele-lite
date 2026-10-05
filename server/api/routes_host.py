@@ -1,15 +1,17 @@
 """Mele Host（10-04）：自己部署的单人服务器。
 /version 给 App 判断连的是不是 Host、接口版本对不对得上；/host/pair 用配对码换登录凭证；
-/me/import 收 Lite 手机里搬来的东西（第三步）；带文件的房间先 /me/import/files 问缺哪些、一个个 PUT 上来。"""
+/me/import 收 Lite 手机里搬来的东西（第三步）；带文件的房间先 /me/import/files 问缺哪些、一个个 PUT 上来。
+/companions/{id}/import 收别的 AI 的官方聊天记录（10-05，brain/chat_import.py；包在手机上认好再发来）。"""
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response
 
-from brain import auth, host, host_import
+from brain import auth, chat_import, host, host_import
 
-from .deps import Api, account, api
+from .deps import Api, account, api, own_companion
 
 router = APIRouter()
 LOCK_AFTER = 5                      # 连错几次锁一会儿（8 位码猜不中，这里只是防有人一直敲）
@@ -79,3 +81,19 @@ async def import_file(sha: str, request: Request, acc=Depends(account), a: Api =
     except host_import.ImportError_ as e:
         raise HTTPException(400, str(e)) from e
     return Response(status_code=204)
+
+
+@router.post("/companions/{cid}/import", status_code=201)
+async def import_chats(cid: UUID, body: dict = Body(...), acc=Depends(account), a: Api = Depends(api)):
+    """搬别的 AI 的聊天：{source, conversations: [{title, messages: [{role, text, at}]}], extra, memories}"""
+    await own_companion(a, acc, cid)
+    try:
+        return await chat_import.start(a.deps, acc, cid, body)
+    except chat_import.ImportError_ as e:
+        raise HTTPException(400, str(e)) from e
+
+
+@router.get("/companions/{cid}/import")
+async def import_chats_status(cid: UUID, acc=Depends(account), a: Api = Depends(api)):
+    await own_companion(a, acc, cid)
+    return await chat_import.status(a.deps, acc, cid)

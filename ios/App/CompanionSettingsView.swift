@@ -550,6 +550,20 @@ struct CompanionSettingsView: View {
                 }
                 .buttonStyle(.plain)
             }
+            // 搬家（10-05）：导入 ChatGPT / Claude / DeepSeek / Gemini 官方导出的聊天记录；连着 Host 也能搬（包在手机上认）
+            if Lite.on {
+                NavigationLink {
+                    ImportChatsView(companion: companion).environmentObject(theme)
+                } label: {
+                    HStack {
+                        row("从别的 AI 搬过来", "ChatGPT、Claude、DeepSeek、Gemini 导出的聊天记录，再挑出值得记住的事")
+                        Spacer()
+                        Image(systemName: "chevron.right").font(Typo.icon(13)).foregroundStyle(theme.inkFaint)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
             if Lite.local { note(linked ? "TA 每句话都会先去记忆库想一下，「联想」管想起多少。"
                                      : "接上记忆库，TA 每句话都会先去想一下；没接的话，Lite 记得的是最近的聊天和回声。") }
             Toggle(isOn: store.s("long_mode", false)) { row("长文模式", "回复整段发，不切成一条条") }

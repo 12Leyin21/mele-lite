@@ -69,6 +69,7 @@ final class LocalHost: @unchecked Sendable {
         default:
             if let res = await LocalVoice.handle(r, host: self) { return res }
             if let res = await LocalMCP.handle(r, host: self) { return res }
+            if let res = await LocalImport.handle(r, host: self) { return res }
             if let res = await LocalMemoryRooms.handle(r, host: self) { return res }
             if let res = await LocalFood.handle(r, host: self) { return res }
             if let res = LocalBooks.handle(r, host: self) { return res }
@@ -430,7 +431,7 @@ final class LocalHost: @unchecked Sendable {
         let shown = bubbles.map { LocalVoice.isVoice($0) ? LocalVoice.asText($0) : $0 }
         return ["id": m["id"] ?? 0, "role": role, "text": text, "thinking": m["thinking"] ?? "",
                 "thinking_ms": m["thinking_ms"] ?? NSNull(), "at": m["at"] ?? "", "bubbles": shown, "voices": voices, "cards": m["cards"] ?? [Any](),
-                "reaction": m["reaction"] ?? NSNull(), "attachments": atts]
+                "reaction": m["reaction"] ?? NSNull(), "attachments": atts, "divider": m["divider"] ?? NSNull()]
     }
 
     private func messages(_ conv: String, _ q: [String: String]) -> LocalResponse {
