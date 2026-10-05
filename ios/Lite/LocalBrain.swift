@@ -1,6 +1,7 @@
 #if LITE
 import Foundation
 import UIKit
+import UserNotifications
 import MeleLiteCore
 
 /// 小管家的大脑：照服务器 api/rooms.py + brain/turn.py 的节奏，用零件包的提示词和三家接头跑一轮。
@@ -19,8 +20,49 @@ final class LocalBrain: @unchecked Sendable {
         var running: Task<Void, Never>?
     }
     private var rooms: [String: Room] = [:]
+    private var graceIDs: [String: UIBackgroundTaskIdentifier] = [:]
 
     init(host: LocalHost) { self.host = host }
+
+    // MARK: 切后台（10-05 夜Tilia：回完消息切走，TA 的回复也要出来）
+    // 发了话就向苹果多要一段后台时间（大约 30 秒），撑过「等 TA 说完」和它想、说的这一轮；这一轮跑完、没有下一轮了再还回去。
+    // 苹果收回时间之前没说完的，回到 App 再接着跑。
+
+    private func holdOn(_ conv: String) {
+        // 回复要能在你切走时弹通知：第一次发消息时问一次权限（给过 / 拒过的，系统不会再弹）
+        UNUserNotificationCenter.current().getNotificationSettings { st in
+            if st.authorizationStatus == .notDetermined {
+                UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+            }
+        }
+        DispatchQueue.main.async { [self] in
+            guard lock.withLock({ graceIDs[conv] == nil }) else { return }
+            let id = UIApplication.shared.beginBackgroundTask(withName: "reply") { [weak self] in self?.letGo(conv) }
+            lock.withLock { graceIDs[conv] = id }
+        }
+    }
+
+    private func letGo(_ conv: String) {
+        DispatchQueue.main.async { [self] in
+            guard let id = lock.withLock({ graceIDs.removeValue(forKey: conv) }) else { return }
+            UIApplication.shared.endBackgroundTask(id)
+        }
+    }
+
+    /// 发一个气泡时 TA 不在 App 里：弹一条本机通知（名字 + 这个气泡），点开进这个窗口
+    private func notifyIfAway(_ conv: String, companion: String, name: String, text: String) async {
+        let away = await MainActor.run { UIApplication.shared.applicationState != .active }
+        let body = text.split(whereSeparator: \.isNewline).joined(separator: " ").trimmingCharacters(in: .whitespaces)
+        guard away, !body.isEmpty else { return }
+        let n = UNMutableNotificationContent()
+        n.title = name
+        n.body = body.count > 150 ? String(body.prefix(150)) + "…" : body
+        n.sound = .default
+        n.userInfo = ["conversation": conv, "companion": companion]
+        n.threadIdentifier = conv                      // 同一个窗口的几条叠在一起
+        try? await UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "reply-\(conv)-\(Date().timeIntervalSince1970)",
+                                                                               content: n, trigger: nil))
+    }
 
     private func room(_ conv: String) -> Room {
         lock.withLock {
@@ -75,6 +117,7 @@ final class LocalBrain: @unchecked Sendable {
             return Array(r.listeners.values)
         }
         for c in all { c.finish() }
+        letGo(conv)
     }
 
     // MARK: 发
@@ -103,17 +146,21 @@ final class LocalBrain: @unchecked Sendable {
                 self?.flush(conv)
             }
         }
+        if queued { holdOn(conv) }
         return .json(["queued": queued, "client_id": clientID.map { $0 as Any } ?? NSNull(), "reply_wait": wait], status: 202)
     }
 
     private func flush(_ conv: String) {
         let r = room(conv)
-        let (parts, files): ([String], [String]) = lock.withLock {
-            guard r.running == nil else { return ([], []) }       // 上一轮还在跑：等它跑完再 flush
+        let (parts, files, busy): ([String], [String], Bool) = lock.withLock {
+            guard r.running == nil else { return ([], [], true) }       // 上一轮还在跑：等它跑完再 flush
             defer { r.pending = []; r.files = [] }
-            return (r.pending, r.files)
+            return (r.pending, r.files, false)
         }
-        guard !parts.isEmpty || !files.isEmpty else { return }
+        guard !parts.isEmpty || !files.isEmpty else {
+            if !busy { letGo(conv) }
+            return
+        }
         let task = Task { [weak self] in
             guard let self else { return }
             self.host.store.addMessage(conv, role: "user", text: parts.joined(separator: "\n"),
@@ -131,6 +178,7 @@ final class LocalBrain: @unchecked Sendable {
             await self.runTurn(conv, images: files)
             let again = self.lock.withLock { () -> Bool in r.running = nil; return !r.pending.isEmpty || !r.files.isEmpty }
             if again { self.flush(conv) }
+            else { self.letGo(conv) }
         }
         lock.withLock { r.running = task }
     }
@@ -384,7 +432,11 @@ final class LocalBrain: @unchecked Sendable {
                 emit(conv, ["type": "typing"])
                 try? await Task.sleep(for: .seconds(Bubbles.typingDelay(b)))
             }
-            guard LocalVoice.isVoice(b) else { emit(conv, ["type": "bubble", "text": b]); continue }
+            guard LocalVoice.isVoice(b) else {
+                emit(conv, ["type": "bubble", "text": b])
+                await notifyIfAway(conv, companion: cid, name: contact.name, text: b)      // 切走了：一个气泡一条通知（像微信）
+                continue
+            }
             // 语音条：念出来挂上；关着 / 无痕 / 没 key / 念不成 → 当文字发，存档里那段也改成文字
             let near = { (j: Int) -> String? in bubbles.indices.contains(j) ? LocalVoice.asText(bubbles[j]) : nil }
             var clip: [String: Any]?
@@ -399,6 +451,7 @@ final class LocalBrain: @unchecked Sendable {
                 if let r = finalText.range(of: b) { finalText.replaceSubrange(r, with: LocalVoice.asText(b)) }
                 emit(conv, ["type": "bubble", "text": LocalVoice.asText(b)])
             }
+            await notifyIfAway(conv, companion: cid, name: contact.name, text: LocalVoice.asText(b))
         }
         if let want = parsed.wantsPeek, peek == nil {       // 申请卡跟在它说的话后面
             emit(conv, ["type": "card", "kind": "peek", "text": want, "private": false, "data": ["state": "ask"]])

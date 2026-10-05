@@ -89,7 +89,7 @@ struct MusicRoomView: View {
             }
             if music.picks.isEmpty {
                 Text((music.link?.picks_n ?? 0) == 0 ? String(localized: "每日私选关着。下面「设置」里可以打开。")
-                     : Lite.on ? String(localized: "今天还没挑——过了推歌时间、你打开 App 的时候\(aiName)就会挑，挑好了在聊天里发给你。")
+                     : Lite.local ? String(localized: "今天还没挑——过了推歌时间、你打开 App 的时候\(aiName)就会挑，挑好了在聊天里发给你。")
                      : String(localized: "今天还没挑——早上候选备好，\(aiName)醒来就会挑，挑好了在聊天里发给你。"))
                     .font(Typo.sans(14)).foregroundStyle(theme.inkDim).padding(.vertical, 12)
             }

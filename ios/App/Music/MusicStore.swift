@@ -89,7 +89,10 @@ final class MusicStore: ObservableObject {
     @Published var busy = false
 
     var platform: MusicPlatform { MusicPlatform(rawValue: link?.platform ?? "") ?? .apple }
-    var appleLinked: Bool { link?.platform == "apple" && link?.linked == true }
+    /// Lite（本机和连 Host 都是）不交凭证给服务器，Host 回的 linked 永远是 false：看手机自己给没给「媒体与 Apple Music」权限（10-05 夜）
+    var appleLinked: Bool {
+        link?.platform == "apple" && (Lite.on ? MPMediaLibrary.authorizationStatus() == .authorized : link?.linked == true)
+    }
 
     func loadAll() async {
         await load()
