@@ -224,7 +224,7 @@ CREATE TABLE IF NOT EXISTS focus_sessions (         -- 哨兵：一次专注（�
 ALTER TABLE chat_messages DROP CONSTRAINT IF EXISTS chat_messages_role_check;
 ALTER TABLE chat_messages ADD CONSTRAINT chat_messages_role_check CHECK (role IN ('user', 'assistant', 'wake'));
 ALTER TABLE memory_edits DROP CONSTRAINT IF EXISTS memory_edits_kind_check;
-ALTER TABLE memory_edits ADD CONSTRAINT memory_edits_kind_check CHECK (kind IN ('memory', 'person', 'sticky', 'clock', 'far_date', 'drawer', 'lore', 'todo'));  -- 09-30：每处都写全，旧写法遇到新类型的行会整份建表失败
+ALTER TABLE memory_edits ADD CONSTRAINT memory_edits_kind_check CHECK (kind IN ('memory', 'person', 'sticky', 'clock', 'far_date', 'drawer', 'lore', 'todo', 'milestone'));  -- 09-30：每处都写全，旧写法遇到新类型的行会整份建表失败
 
 -- 标记表情（2026-09-27，iOS 第一块）：TA 给它的一句点个 ❤️；下一轮易变区告诉它一次（told）
 CREATE TABLE IF NOT EXISTS reactions (
@@ -285,7 +285,7 @@ ALTER TABLE clocks ADD CONSTRAINT clocks_kind_check CHECK (kind IN ('user', 'sel
 -- 倒回记账：加远事、抽屉的信（09-28）
 ALTER TABLE memory_edits DROP CONSTRAINT IF EXISTS memory_edits_kind_check;
 ALTER TABLE memory_edits ADD CONSTRAINT memory_edits_kind_check
-  CHECK (kind IN ('memory', 'person', 'sticky', 'clock', 'far_date', 'drawer', 'lore', 'todo'));
+  CHECK (kind IN ('memory', 'person', 'sticky', 'clock', 'far_date', 'drawer', 'lore', 'todo', 'milestone'));
 
 -- 抽屉（09-28）：一个账号一个抽屉，装着所有联系人写给 TA 的信。TA 只看得见信封；到日子或者输对它给的 4 位密码才能拆
 CREATE TABLE IF NOT EXISTS drawer_letters (
@@ -451,7 +451,7 @@ CREATE INDEX IF NOT EXISTS lore_account_idx ON lore (account_id);
 -- 世界书也能倒回（09-30）
 ALTER TABLE memory_edits DROP CONSTRAINT IF EXISTS memory_edits_kind_check;
 ALTER TABLE memory_edits ADD CONSTRAINT memory_edits_kind_check
-  CHECK (kind IN ('memory', 'person', 'sticky', 'clock', 'far_date', 'drawer', 'lore', 'todo'));
+  CHECK (kind IN ('memory', 'person', 'sticky', 'clock', 'far_date', 'drawer', 'lore', 'todo', 'milestone'));
 
 -- 分轻重的推送（09-30，Instinct 借的，Tilia要）：TA 定的钟、远事当天那次用 iOS「时效性通知」，开了勿扰也能收到
 ALTER TABLE push_queue ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT false;
@@ -813,3 +813,13 @@ CREATE TABLE IF NOT EXISTS host_imported (
   PRIMARY KEY (account_id, kind, local_id)
 );
 ALTER TABLE host_imported ADD COLUMN IF NOT EXISTS host_id TEXT;   -- 搬过来后在 Host 上的编号（书、划线、饮食照片：后面的条目要接回去）
+
+-- 里程碑（10-05 上服务器；Lite 早有）：它觉得值得记住的一刻立一座，TA 在 Record 的大事记里看
+CREATE TABLE IF NOT EXISTS milestones (
+  id           BIGSERIAL   PRIMARY KEY,
+  account_id   UUID        NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  companion_id UUID        NOT NULL REFERENCES companions(id) ON DELETE CASCADE,
+  title        TEXT        NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS milestones_account_idx ON milestones (account_id, created_at);

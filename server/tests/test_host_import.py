@@ -311,3 +311,15 @@ async def test_import_files_endpoints(pool, tmp_path):
         assert r.status_code == 400
         r = await c.post("/me/import/files", json={"rooms": rooms2()})
         assert _sha(PHOTO) not in r.json()["missing"]
+
+
+async def test_import_milestones(pool, box, tmp_path):
+    acc = await auth.new_account(pool)
+    r = {"milestones": [{"id": 1, "companion_id": CID, "title": "第一次一起看海", "at": "2026-10-03T09:00:00Z"},
+                        {"id": 2, "companion_id": "6b1f0c3e-9999-4a2b-9c3d-000000000009", "title": "别人的"}]}
+    got = await host_import.run(pool, box, acc, bundle(rooms=r), files_dir=tmp_path, now=NOW, embedder=FakeEmbedder())
+    assert got["rooms"] == {"milestones": 1}
+    m = await pool.fetchrow("SELECT title, created_at FROM milestones WHERE account_id = $1", acc)
+    assert m["title"] == "第一次一起看海" and m["created_at"] == datetime(2026, 10, 3, 9, tzinfo=timezone.utc)
+    got = await host_import.run(pool, box, acc, bundle(rooms=r), files_dir=tmp_path, now=NOW, embedder=FakeEmbedder())
+    assert got["rooms"] == {}

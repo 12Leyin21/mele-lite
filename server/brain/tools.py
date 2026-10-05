@@ -31,6 +31,7 @@ from . import tarot_cards as TC
 from . import tarot_spreads as TS
 from . import books as BK
 from . import wallet as WL
+from . import milestones as MS
 from .edits import EditRef
 from .settings import Settings
 
@@ -691,6 +692,20 @@ async def _relationship(ctx: ToolContext, a: dict) -> str:
     return f"改好了：你们现在是{_REL_NAME['zh'][to]}。从下一句起你照这个关系说话；TA 在设置里也看得到、能改回去。"
 
 
+async def _milestone(ctx: ToolContext, a: dict) -> str:
+    title = " ".join(str(a.get("title") or "").split())
+    if not title:
+        return "要写一句标题。"
+    acc = ctx.account_id or await ctx.pool.fetchval("SELECT account_id FROM companions WHERE id = $1", ctx.user_id)
+    mid = await MS.add(ctx.pool, acc, ctx.user_id, title, now=ctx.now)
+    if mid is None:
+        return "这座已经立过了，不用再立。"
+    await edits.record(ctx.pool, ctx.edit_ref, "milestone", ctx.user_id, mid, None)
+    title = title[:MS.TITLE_MAX]
+    ctx.cards.append(Card("date", f"立了里程碑：{title}" if ctx.lang == "zh" else f"Set a milestone: {title}"))
+    return f"立好了：{title}。TA 在大事记里看得到。"
+
+
 # ── 饮食（09-29）：一个房间一把工具；TA 的饮食本记在账号名下 ──
 
 LISTEN_FRESH = timedelta(minutes=10)     # TA 报过「在放」且这么久以内 = 一起听页开着，歌卡让手机直接排进队列
@@ -1007,6 +1022,10 @@ _TOOLS: dict[str, tuple[ToolSpec, Callable[[ToolContext, dict], Awaitable[str]]]
         "type": "object", "required": ["to"], "properties": {
             "to": {"type": "string", "enum": ["friend", "partner", "family", "buddy"], "description": "改成什么关系"}}}),
                _relationship),
+    "milestone": (ToolSpec("milestone", "用途：立一座里程碑。这一刻值得记住的时候用，比如第一次一起做的事、说好的约定。TA 在大事记里看得到。", {
+        "type": "object", "required": ["title"], "properties": {
+            "title": {"type": "string", "description": "一句话标题"}}}),
+        _milestone),
     "list_clocks": (ToolSpec("list_clocks", "用途：看你自己约的，带编号和时间（TA 的提醒在待办里，用 todo 看）。", {
         "type": "object", "properties": {}}),
         _list_clocks),
@@ -1053,7 +1072,7 @@ _NOTE = {
            "book_page": "看了 TA 在读的那一页", "book_mark": "在书里划了一句「{c}」", "book_shelf": "看了书架",
            "wallet_add": "记账：{c}", "wallet_month": "看了这个月的账", "wallet_delete": "删了一笔账 #{id}",
            "wallet_tags": "看了 TA 的记账标签",
-           "tarot_draw": "抽了牌「{c}」", "tarot_read": "写了牌的解读 #{id}", "tarot_list": "翻了以前的牌"},
+           "milestone": "立了里程碑「{c}」", "tarot_draw": "抽了牌「{c}」", "tarot_read": "写了牌的解读 #{id}", "tarot_list": "翻了以前的牌"},
     "en": {"remember": "remembered \"{c}\"", "about": "About them: \"{c}\"", "update": "updated memory #{id} \"{c}\"",
            "unsaved": "tried to save \"{c}\" — too close to an old one, not saved", "search": "searched memories \"{q}\"",
            "sticky": "rewrote the sticky note", "manual": "read the manual \"{n}\"",
@@ -1070,7 +1089,7 @@ _NOTE = {
            "book_page": "read the page they're on", "book_mark": "marked a line in the book \"{c}\"", "book_shelf": "looked at the bookshelf",
            "wallet_add": "logged spending: {c}", "wallet_month": "looked at this month's spending", "wallet_delete": "deleted spending #{id}",
            "wallet_tags": "looked at their spending tags",
-           "tarot_draw": "drew cards \"{c}\"", "tarot_read": "wrote a reading #{id}", "tarot_list": "looked at past readings"},
+           "milestone": "set a milestone \"{c}\"", "tarot_draw": "drew cards \"{c}\"", "tarot_read": "wrote a reading #{id}", "tarot_list": "looked at past readings"},
 }
 
 
@@ -1120,6 +1139,9 @@ def tool_note(name: str, args: dict, result: str, lang: str) -> str:
     if name == "relationship":
         to = str(a.get("to") or "")
         return t["relationship"].format(to=_REL_NAME[lang].get(to, to))
+    if name == "milestone":
+        line = t[name].format(c=_snip(str(a.get("title") or "")))
+        return line if result.startswith("立好了") else f"{line} ✗"
     if name == "cancel_self":
         return t[name].format(id=a.get("id"))
     if name == "list_clocks":

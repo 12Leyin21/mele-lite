@@ -88,6 +88,8 @@ async def undo(pool, embedder, conversation: UUID, from_turn_msg: int) -> int:
             elif r["kind"] == "drawer":        # 抽屉：新放的信拿走（给钥匙、烧掉不撤）
                 await pool.execute("DELETE FROM drawer_letters WHERE id = $1 AND companion_id = $2",
                                    r["memory_id"], r["owner"])
+            elif r["kind"] == "milestone":     # 里程碑：新立的拿掉（owner = 联系人）
+                await pool.execute("DELETE FROM milestones WHERE id = $1 AND companion_id = $2", r["memory_id"], r["owner"])
             elif r["kind"] == "lore":          # 世界书：新记的删掉，改过的改回去（owner = 账号）
                 from . import lore
                 if before is None:

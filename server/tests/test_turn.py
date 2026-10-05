@@ -57,7 +57,7 @@ async def test_simple_turn_bubbles_saved_and_accounted(pool, user_a):
     last = req.messages[-1].text
     assert "\n\n早\n\n〔想事的时候〕\n" in last and "〔现在〕" in last                  # 思考风格压在用户这句后面（照之前自用的 App）
     assert last.index("〔现在〕") < last.index("早")
-    assert [t.name for t in req.tools] == ["album", "book", "cancel_self", "diary", "drawer", "food", "list_clocks", "lore", "memory_remember", "memory_search", "moments", "music", "note_about_user", "offer_focus", "person_card", "read_manual", "relationship", "remember_date", "schedule_self", "sticker", "sticky_note", "tarot", "todo", "wallet"]
+    assert [t.name for t in req.tools] == ["album", "book", "cancel_self", "diary", "drawer", "food", "list_clocks", "lore", "memory_remember", "memory_search", "milestone", "moments", "music", "note_about_user", "offer_focus", "person_card", "read_manual", "relationship", "remember_date", "schedule_self", "sticker", "sticky_note", "tarot", "todo", "wallet"]
 
 
 async def test_history_keeps_raw_words_not_the_volatile_part(pool, user_a):

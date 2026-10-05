@@ -6,7 +6,7 @@
 - Host 配对时送的那个空 Lumi（一句都没聊过）在搬进来的联系人面前让位。
 - 设置过一遍 Settings（不认识的键丢掉、不合法的报错），跟 Host 自己存的一样干净。
 - 房间（10-05 第一批）：包里 rooms = {kind: [手机条目]}，手机本来就照服务器的形状存。搬过的记在 host_imported，
-  再搬只补新的；条目的联系人 Host 上没有就跳过。里程碑 Host 上没有这个房间，不搬。
+  再搬只补新的；条目的联系人 Host 上没有就跳过。里程碑 10-05 也上了服务器，一起搬。
 - 带文件的房间（10-05 第二批：相册、表情包、书架、饮食、朋友圈、塔罗）：文件不塞进包里——手机先问 needed() 缺哪些指纹，
   一个个 PUT 上来 stage() 进暂存，包里的条目只写指纹；文件没到的条目这次跳过（不记账），下次再搬补上。搬完清空暂存。
   搬来的朋友圈不排联系人来刷；没解完的塔罗记成 failed（不在 Host 上偷偷花钱）。"""
@@ -27,7 +27,7 @@ from .settings import Settings
 VERSION = 1
 STAGING = "import-staging"
 STAGE_MAX = 25 * 1024 * 1024          # 一个文件最多 25MB（书 20MB、照片 10MB 都装得下）
-TEXT_KINDS = ("diary", "drawer", "dates", "todos", "wallet", "people", "lore", "favorites")
+TEXT_KINDS = ("diary", "drawer", "dates", "todos", "wallet", "people", "lore", "favorites", "milestones")
 FILE_KINDS = ("album", "stickers", "books", "book-marks", "book-reading", "food", "food-covers", "moments",
               "moment-profiles", "tarot")   # 顺序要紧：书在划线前，饮食在封面前
 
@@ -312,6 +312,13 @@ async def _rooms(pool, acc: UUID, rooms: dict, *, now: datetime, embedder, files
                                acc, c, conv, mid, int(it.get("slot") or 0), bool(it.get("mine")), str(it.get("text") or ""),
                                json.dumps(it.get("files") or []), _uuid(it.get("group_id")) if it.get("group_id") else None,
                                said, _when(it.get("saved_at"), now))
+        elif kind == "milestones":
+            c, ok = comp(it)
+            title = " ".join(str(it.get("title") or "").split())[:60]
+            if not ok or not title:
+                return False
+            await pool.execute("INSERT INTO milestones (account_id, companion_id, title, created_at) VALUES ($1, $2, $3, $4)",
+                               acc, c, title, _when(it.get("at"), now))
         else:
             return await with_files(kind, it)
         return True

@@ -5,10 +5,10 @@ import Foundation
 /// 搬家包（10-04 Mele Host 第三步）：手机里的东西打成一包，交给 Host 的 /me/import（server/brain/host_import.py）。
 /// 第一版搬核心：我的设定、模型钥匙（原文，走 HTTPS 交给自己的 Host）、联系人（人设、设置、头像、用哪把钥匙）、平常窗口的聊天。
 /// 无痕窗口和小号窗口不搬（Host 还没有小号）。10-05 加了第一批房间（纯文字的八样）和第二批（带文件的：相册、表情包、书架、饮食、朋友圈、塔罗）。
-/// 带文件的：条目里只写文件指纹（sha256），文件另外一个个传（HostLink.moveFromPhone）。里程碑 Host 上没有，不搬。手机里的原件一个不删。
+/// 带文件的：条目里只写文件指纹（sha256），文件另外一个个传（HostLink.moveFromPhone）。里程碑 10-05 也上了 Host，一起搬。手机里的原件一个不删。
 enum LocalExport {
     static let version = 1
-    static let roomKinds = ["diary", "drawer", "dates", "todos", "wallet", "people", "lore", "favorites"]
+    static let roomKinds = ["diary", "drawer", "dates", "todos", "wallet", "people", "lore", "favorites", "milestones"]
 
     static func hostBundle(_ host: LocalHost = .shared) -> [String: Any] { hostBundle(host, withFiles: false).bundle }
 

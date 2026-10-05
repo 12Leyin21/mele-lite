@@ -263,7 +263,7 @@ struct HostConnectSheet: View {
                 Label(String(localized: "连上了"), systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 Text("手机里有 \(has.companions) 个联系人、\(has.messages) 条聊天。要搬到 Host 上吗？")
             } footer: {
-                Text("搬的是：我的设定、模型钥匙、联系人（人设、设置、头像）、平常窗口的聊天，还有日记、信、远事、待办、钱包、人物卡、世界书、收藏夹、相册、表情包、书架、饮食、朋友圈、塔罗。照片多的话要传一会儿，中途断了再点一次接着传。手机里的原件一个都不删，断开就回来。")
+                Text("搬的是：我的设定、模型钥匙、联系人（人设、设置、头像）、平常窗口的聊天，还有日记、信、远事、待办、钱包、人物卡、世界书、收藏夹、里程碑、相册、表情包、书架、饮食、朋友圈、塔罗。照片多的话要传一会儿，中途断了再点一次接着传。手机里的原件一个都不删，断开就回来。")
             }
             if let moved {
                 Section {
