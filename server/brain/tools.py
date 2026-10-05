@@ -1024,7 +1024,7 @@ _TOOLS: dict[str, tuple[ToolSpec, Callable[[ToolContext, dict], Awaitable[str]]]
                _relationship),
     "milestone": (ToolSpec("milestone", "用途：立一座里程碑。这一刻值得记住的时候用，比如第一次一起做的事、说好的约定。TA 在大事记里看得到。", {
         "type": "object", "required": ["title"], "properties": {
-            "title": {"type": "string", "description": "一句话标题"}}}),
+            "title": {"type": "string", "description": "一句短标题，十几个字；一件事一座，两件就立两座"}}}),
         _milestone),
     "list_clocks": (ToolSpec("list_clocks", "用途：看你自己约的，带编号和时间（TA 的提醒在待办里，用 todo 看）。", {
         "type": "object", "properties": {}}),

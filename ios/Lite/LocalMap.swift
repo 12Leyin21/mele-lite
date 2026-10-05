@@ -85,9 +85,13 @@ enum LocalMap {
     static func snapshot(_ s: LocalStore, companion cid: String) -> [String: Any] {
         let pls = places(s, cid)
         let names = Dictionary(pls.map { ($0["id"] as? Int ?? 0, $0["name"] as? String ?? "") }, uniquingKeysWith: { a, _ in a })
+        // 没到点的只给时间和地点（10-05 Tilia：它还没去，「在干嘛」到了那个点才出现，不然像提前剧透）
+        let f = DateFormatter(); f.dateFormat = "HH:mm"
+        let hm = f.string(from: Date())
         let items = today(s, cid).map { it -> [String: Any] in
             var o = it
             o["place"] = names[it["place_id"] as? Int ?? 0] ?? ""
+            if (it["time"] as? String ?? "") > hm { o["doing"] = ""; o["later"] = true }
             return o
         }
         var out: [String: Any] = ["places": pls, "today": items, "generating": generating.withLock { $0.contains(cid) }]

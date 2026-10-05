@@ -36,6 +36,12 @@ public enum Monologue {
     }
 
     /// 放进 system 的规矩。pronoun = 独白里怎么称呼对方（她 / 他 / TA）；style = 用户自己写的思考风格，空着就不加
+    /// 每轮压在 TA 最新那句后面的一行短提醒（10-05 真 key：只放 system 里，聊长了 DeepSeek 就不写独白了；服务器一直每轮都贴）
+    public static func hook(zh: Bool, pronoun: String) -> String {
+        zh ? "〔独白〕要调工具的先调，先别写字；然后回复最前面先写 [独白]…[/独白]，那是你一个人在想，里面\(pronoun)一直是「\(pronoun)」，一个「你」字都不写；写完一定用 [/独白] 收尾，再换成对\(pronoun)说话。"
+           : "〔Monologue〕If you need tools, call them first, before any text; then start the reply with [monologue]…[/monologue] — you thinking alone, where they are always \"\(pronoun)\", never \"you\"; always close it with [/monologue], then switch to talking to them."
+    }
+
     public static func rules(zh: Bool, pronoun: String, style: String) -> String {
         let style = style.trimmingCharacters(in: .whitespacesAndNewlines)
         if zh {

@@ -147,6 +147,17 @@ private func run(_ cfg: ProviderConfig, _ reply: StubProtocol.Reply, image: Data
         await #expect(throws: LLMError.network) { _ = try await run(openai, .init(status: 200, body: sse, failMidway: true)) }
     }
 
+    @Test func deepSeekThinkingSwitch() {
+        let off = OpenAIClient(config: ProviderConfig(kind: .openai, baseURL: "https://api.deepseek.com", model: "deepseek-flash", thinking: false),
+                               key: "k", session: .shared)
+        #expect((off.body(ChatRequest(system: "s", turns: []))["thinking"] as? [String: String])?["type"] == "disabled")
+        let on = OpenAIClient(config: ProviderConfig(kind: .openai, baseURL: "https://api.deepseek.com", model: "deepseek-flash", thinking: true),
+                              key: "k", session: .shared)
+        #expect((on.body(ChatRequest(system: "s", turns: []))["thinking"] as? [String: String])?["type"] == "enabled")
+        let gpt = OpenAIClient(config: ProviderConfig(kind: .openai, model: "gpt-5"), key: "k", session: .shared)
+        #expect(gpt.body(ChatRequest(system: "s", turns: []))["thinking"] == nil)       // 别家不认这个字段
+    }
+
     @Test func defaultOpenAIBase() {
         let c = OpenAIClient(config: ProviderConfig(kind: .openai, model: "gpt-5"), key: "k", session: .shared)
         #expect(c.endpoint.absoluteString == "https://api.openai.com/v1/chat/completions")

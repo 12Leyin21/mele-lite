@@ -321,7 +321,7 @@ enum LocalRooms2 {
         let e: [String: Any] = ["id": s.nextID("wallet"), "kind": kind, "amount": n, "category": category,
                                 "note": String((b["note"] as? String ?? "").prefix(200)),
                                 "day": (b["day"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? LocalRooms.today(),
-                                "author": "user", "created_at": LocalStore.iso(Date())]
+                                "author": "user", "created_at": LocalStore.iso(Date()), "told": false]
         s.saveCollection("wallet", s.collection("wallet") + [e])
         return .json(e, status: 201)
     }

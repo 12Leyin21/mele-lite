@@ -112,6 +112,15 @@ final class LocalHost: @unchecked Sendable {
 
     var keys: [[String: Any]] { store.read("keys.json") as? [[String: Any]] ?? [] }
 
+    #if DEBUG
+    /// 自测（10-05）：模拟器启动时用环境变量 SIMCTL_CHILD_LITE_TEST_DEEPSEEK 塞一把 DeepSeek 钥匙（不在屏幕上敲 key）；已经有 deepseek 的不重复加
+    func debugSeedKey() {
+        guard let key = ProcessInfo.processInfo.environment["LITE_TEST_DEEPSEEK"], !key.isEmpty,
+              !keys.contains(where: { ($0["provider"] as? String) == "deepseek" }) else { return }
+        _ = addKey(["provider": "deepseek", "api_key": key, "chat_model": "deepseek-flash"])
+    }
+    #endif
+
     private func addKey(_ b: [String: Any]) -> LocalResponse {
         let provider = b["provider"] as? String ?? ""
         let key = (b["api_key"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -483,6 +492,7 @@ final class LocalHost: @unchecked Sendable {
         guard let mid, let (conv, i) = store.locate(message: mid) else { return .error(404, String(localized: "没有这条消息")) }
         var list = store.messages(conv)
         list[i]["reaction"] = emoji ?? NSNull()
+        list[i]["reaction_told"] = emoji == nil ? nil : false      // 下一轮告诉它一次（LocalNotes）
         store.saveMessages(conv, list)
         return .empty
     }

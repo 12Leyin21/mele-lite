@@ -59,6 +59,7 @@ struct WorldDay: Hashable {
     let placeID: Int
     let place: String
     let doing: String
+    var later = false        // 还没到点：只露时间和地点（10-05 Tilia）
 }
 
 struct WorldSnapshot {
@@ -72,7 +73,7 @@ struct WorldSnapshot {
         places = (d["places"] as? [[String: Any]] ?? []).compactMap(WorldPlace.init)
         func day(_ x: [String: Any]) -> WorldDay {
             WorldDay(time: x["time"] as? String ?? "", placeID: x["place_id"] as? Int ?? 0,
-                     place: x["place"] as? String ?? "", doing: x["doing"] as? String ?? "")
+                     place: x["place"] as? String ?? "", doing: x["doing"] as? String ?? "", later: x["later"] as? Bool ?? false)
         }
         today = (d["today"] as? [[String: Any]] ?? []).map(day)
         now = (d["now"] as? [String: Any]).map(day)
@@ -234,7 +235,8 @@ struct WorldMapView: View {
                             .frame(width: 48, alignment: .leading)
                         Circle().fill(isNow ? theme.accent : theme.inkFaint.opacity(0.35)).frame(width: 7, height: 7).padding(.top, 6)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(d.place).font(Typo.sans(Typo.Size.callout, .semibold)).foregroundStyle(theme.ink)
+                            Text(d.place).font(Typo.sans(Typo.Size.callout, d.later ? .regular : .semibold))
+                                .foregroundStyle(d.later ? theme.inkFaint : theme.ink)
                             if !d.doing.isEmpty {
                                 Text(d.doing).font(Typo.sans(Typo.Size.caption)).foregroundStyle(theme.inkDim)
                             }

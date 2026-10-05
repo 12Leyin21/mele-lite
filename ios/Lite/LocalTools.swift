@@ -62,6 +62,7 @@ enum LocalTools {
         case "wallet_add":
             let (good, v) = ok(LocalRooms2.walletAdd(s, a))
             guard good else { return Outcome(result: "没记上：\(v["detail"] ?? "")", card: nil) }
+            LocalNotes.markTold(s, "wallet", id: v["id"])   // 它自己记的，不用再告诉它
             let yuan = Double(v["amount"] as? Int ?? 0) / 100
             let sym = LocalRooms2.walletSettings(s)["symbol"] as? String ?? ""
             let line = "\(v["category"] ?? "") \(sym)\(String(format: "%g", yuan))\((v["note"] as? String).map { $0.isEmpty ? "" : " · \($0)" } ?? "")"
@@ -84,6 +85,7 @@ enum LocalTools {
         case "food_add":
             let (good, v) = ok(LocalFood.add(host, a))
             guard good else { return Outcome(result: "没记上：\(v["detail"] ?? "")", card: nil) }
+            LocalNotes.markTold(s, "food", id: v["id"])     // 它自己记的，不用再告诉它
             let kcal = (v["kcal"] as? Double).map { " \(Int($0)) kcal" } ?? (zh ? "（在估热量）" : " (estimating)")
             return Outcome(result: "记好了：\(v["meal"] ?? "") \(v["text"] ?? "")\(kcal)", card: card("food", "记了一餐", "Logged food", "\(v["meal"] ?? "") \(v["text"] ?? "")"))
         case "food_lookup":

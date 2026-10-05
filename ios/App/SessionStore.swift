@@ -23,6 +23,11 @@ final class SessionStore: ObservableObject {
         if let i = args.firstIndex(of: "-hostSelfTest"), args.count > i + 2, let u = URL(string: args[i + 1]) {
             HostLink.save(url: u, token: args[i + 2])
         }
+        LocalHost.shared.debugSeedKey()
+        // 自测（10-05）：SIMCTL_CHILD_LITE_TEST_SAY="<窗口编号>|<一句话>" 直接放进那个窗口的输入框（模拟器敲不了中文）
+        if let say = ProcessInfo.processInfo.environment["LITE_TEST_SAY"], let bar = say.firstIndex(of: "|") {
+            UserDefaults.standard.set(String(say[say.index(after: bar)...]), forKey: "chatDraft-\(say[..<bar])")
+        }
         #endif
         // Lite：没有账号、没有服务器，一直是「登录着」，连的是手机里的小管家；连了 Mele Host 就连 Host（10-04）
         let server = HostLink.current?.url.absoluteString ?? LocalHostProtocol.baseURL.absoluteString

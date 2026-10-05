@@ -297,6 +297,14 @@ enum LocalEcho {
         return out
     }
 
+    /// 写到字数上限硬停在半句（10-05 真 key：「……麻辣烫宽粉，嘱」）：退回到最后一个句末；整段都没句末就原样
+    static func wholeSentences(_ text: String) -> String {
+        let ends = Set("。！？!?…」』”")
+        guard let last = text.last, !ends.contains(last), !(last == "." && !text.hasSuffix("..")),
+              let cut = text.lastIndex(where: { ends.contains($0) || $0 == "." }) else { return text }
+        return String(text[...cut])
+    }
+
     static func defect(_ text: String, maxLen: Int, name: String) -> Bool {
         if text.count < 10 || text.count > maxLen { return true }
         guard !name.isEmpty else { return false }
@@ -457,7 +465,8 @@ enum LocalEcho {
                                   turns: [ChatTurn(role: .user, text: prompt)], maxTokens: 4000)
             var text = ""
             do { for try await e in makeClient(p, key: key).stream(req) { if case .text(let t) = e { text += t } } } catch { continue }
-            guard let g = ground(oneLine(text, zh: zh), source: source), !defect(g, maxLen: maxLen, name: name) else { continue }
+            guard let g = ground(oneLine(text, zh: zh), source: source).map(wholeSentences),
+                  !defect(g, maxLen: maxLen, name: name) else { continue }
             return g
         }
         return nil

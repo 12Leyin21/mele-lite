@@ -202,12 +202,24 @@ final class LocalBrain: @unchecked Sendable {
         let stored = host.store.messages(conv).filter { ($0["id"] as? Int ?? 0) > rolledUpto }
         let voiceNotes = Dictionary(host.store.collection("attachments").filter { ($0["kind"] as? String) == "voice" }
             .compactMap { a in (a["id"] as? String).map { ($0, a["caption"] as? String ?? "") } }, uniquingKeysWith: { a, _ in a })
+        // 上一轮它做过的事（立里程碑、抽牌、发表情包、记账……）：存下来的正文把标记洗掉了，卡片又不进上下文，
+        // 它会忘了自己做过、下一轮再做一遍（10-05 真 key 测出来：同一座里程碑连立三轮）。照服务器 TOOLS_HEAD 垫在下一句前面
+        var pendingDeeds = ""
         var history: [Message] = stored.map {
             var text = $0["text"] as? String ?? ""
+            let isAssistant = ($0["role"] as? String) == "assistant"
             // TA 发的语音（10-04）：正文是转写，前面垫一行〔语音 12 秒：说得偏慢〕
             let notes = ($0["attachments"] as? [String] ?? []).compactMap { voiceNotes[$0] }.filter { !$0.isEmpty }
             if !notes.isEmpty { text = notes.joined(separator: "\n") + "\n" + text }
-            return Message(role: ($0["role"] as? String) == "assistant" ? .assistant : .user, text: text, at: LocalStore.date($0["at"]))
+            if isAssistant {
+                let deeds = ($0["cards"] as? [[String: Any]] ?? []).filter { ($0["kind"] as? String) != "peek" }   // 查手机申请自己有一套
+                    .compactMap { $0["text"] as? String }.filter { !$0.isEmpty }
+                pendingDeeds = deeds.isEmpty ? "" : (zh ? "〔上一轮你做过：" : "〔Last turn you did: ") + deeds.joined(separator: zh ? "；" : "; ") + "〕"
+            } else if !pendingDeeds.isEmpty {
+                text = pendingDeeds + "\n" + text
+                pendingDeeds = ""
+            }
+            return Message(role: isAssistant ? .assistant : .user, text: text, at: LocalStore.date($0["at"]))
         }
         if let nudge { history.append(Message(role: .user, text: nudge, at: Date())) }
         let contact = Self.contact(comp, provider: provider)
@@ -229,8 +241,6 @@ final class LocalBrain: @unchecked Sendable {
         var req = Prompt.build(PromptInput(contact: contact, identity: identity, history: history, loreHits: hits,
                                            stickers: stickers, peekResult: peek, lang: zh ? .zh : .en, currentImage: image),
                                budgetChars: LocalEcho.historyCap)
-        let echo = LocalEcho.render(host.store, conversation: conv, zh: zh, userName: identity.userName)
-        if !echo.isEmpty { req.system += "\n\n" + echo }
         let extra = Self.injections(settings, recent: history.suffix(4).map(\.text).joined(separator: "\n"), turn: stored.count)
         if !extra.isEmpty { req.context += "\n\n" + extra }          // 每轮变的都进 context（缓存，10-04）
         // 〔在读〕TA 正在读哪本、〔塔罗〕TA 刚让它解过的一局（一次性）
@@ -281,7 +291,19 @@ final class LocalBrain: @unchecked Sendable {
             default: zh ? "TA" : "they"
             }
             req.system += "\n\n" + Monologue.rules(zh: zh, pronoun: pronoun, style: settings["thinking_style_text"] as? String ?? "")
+            req.context += "\n\n" + Monologue.hook(zh: zh, pronoun: pronoun)
         }
+        // 回声账本放 system 最后（10-05 对照服务器：壹层不变的在前、账本在后），卷一次只动尾巴
+        let echo = LocalEcho.render(host.store, conversation: conv, zh: zh, userName: identity.userName)
+        if !echo.isEmpty { req.system += "\n\n" + echo }
+        // TA 刚做了什么、快到的远事（照服务器易变区那几样）；表情和拆信跟着窗口 / 联系人走，饮食钱包远事是平常的你，小号不给
+        var notes = LocalNotes.reactionLines(host.store, conversation: conv, zh: zh) + LocalNotes.openedLines(host.store, companion: cidNow, zh: zh)
+        if altInfo == nil && !incognito {
+            notes += [LocalNotes.foodNote(host.store, zh: zh), LocalNotes.walletNote(host.store, zh: zh),
+                      LocalNotes.datesLines(host.store, companion: cidNow, conversation: conv, zh: zh)]
+        }
+        for line in notes where !line.isEmpty { req.context += "\n\n" + line }
+        req.context += "\n\n" + LocalNotes.anchor(contact.name, zh: zh)      // 人设锚：离它开口最近的一行
         var text = "", thinking = ""
         var cards: [[String: Any]] = []
         let started = Date()                            // 「思考了 x 秒」：从开口到说完（含中间调工具，10-05）
@@ -344,11 +366,10 @@ final class LocalBrain: @unchecked Sendable {
             let card: [String: Any] = ["kind": "peek", "text": want, "data": ["state": "ask"]]
             cards.append(card)
         }
-        for title in parsed.milestones {
+        for title in parsed.milestones where LocalRooms.addMilestone(host.store, companion: contact.id, title: title) {
             let line = zh ? "立了里程碑：\(title)" : "Set a milestone: \(title)"
             cards.append(["kind": "date", "text": line])
             emit(conv, ["type": "card", "kind": "date", "text": line, "private": false])
-            LocalRooms.addMilestone(host.store, companion: contact.id, title: title)
         }
         let long = settings["long_mode"] as? Bool ?? false
         let bubbles = Bubbles.split(parsed.text, cap: settings["max_bubbles"] as? Int ?? 6, offline: long)

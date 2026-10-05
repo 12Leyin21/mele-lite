@@ -45,6 +45,10 @@ struct OpenAIClient: LLMClient {
         }
         var b: [String: Any] = ["model": config.model, "messages": msgs, "stream": true, "max_tokens": r.maxTokens,
                                 "stream_options": ["include_usage": true]]      // 最后一截带用量（用量页 / 水位）
+        // DeepSeek 不说就默认想（10-05 真 key：手写独白时它还是交一大段英文分析腔、把独白顶掉）。服务器 openai_adapter 也这么带
+        if endpoint.host?.contains("deepseek") == true {
+            b["thinking"] = ["type": config.thinking ? "enabled" : "disabled"]
+        }
         if !r.tools.isEmpty {
             b["tools"] = r.tools.map { ["type": "function", "function": ["name": $0.name, "description": $0.description, "parameters": $0.parameters]] }
         }

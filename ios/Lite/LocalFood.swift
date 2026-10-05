@@ -182,6 +182,7 @@ enum LocalFood {
         e["status"] = e["kcal"] is NSNull ? "pending" : "manual"
         e["note"] = ""
         e["source"] = b["source"] as? String == "watch" ? "watch" : "app"
+        e["told"] = false                                   // TA 自己记的：估好后下一轮告诉它（它用工具记的会标回 true）
         e["ext_id"] = b["ext_id"] ?? NSNull()
         e["photo_ids"] = b["photos"] as? [String] ?? []
         e["created_at"] = now; e["updated_at"] = now

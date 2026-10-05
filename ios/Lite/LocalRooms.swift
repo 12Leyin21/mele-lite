@@ -249,7 +249,10 @@ enum LocalRooms {
     static func openLetter(_ s: LocalStore, _ id: Int?) -> LocalResponse {
         var all = s.collection("drawer")
         guard let id, let i = all.firstIndex(where: { ($0["id"] as? Int) == id }) else { return .error(404, String(localized: "没有这封")) }
-        if all[i]["opened_at"] == nil || all[i]["opened_at"] is NSNull { all[i]["opened_at"] = LocalStore.iso(Date()) }
+        if all[i]["opened_at"] == nil || all[i]["opened_at"] is NSNull {
+            all[i]["opened_at"] = LocalStore.iso(Date())
+            all[i]["told_opened"] = false                   // 下一轮告诉它 TA 拆了（LocalNotes）
+        }
         // 早先存下的信里可能留着《里程碑：…》这类标记：拆开时顺手洗掉（里程碑那时已经没记，这里不补）
         all[i]["content"] = LocalBrain.cleanLetter(all[i]["content"] as? String ?? "").0
         s.saveCollection("drawer", all)
@@ -277,9 +280,17 @@ enum LocalRooms {
 
     // MARK: 里程碑
 
-    static func addMilestone(_ s: LocalStore, companion: String, title: String) {
-        s.saveCollection("milestones", s.collection("milestones") + [["id": s.nextID("milestone"), "companion_id": companion,
-                                                                        "title": title, "at": LocalStore.iso(Date())]])
+    /// 立一座；同一个联系人同一句一天内立过就不再立（10-05 真 key 测出来：它下一轮会把上一轮那座再写一遍）。返回立了没有
+    @discardableResult
+    static func addMilestone(_ s: LocalStore, companion: String, title: String) -> Bool {
+        let title = title.split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        guard !title.isEmpty else { return false }
+        let all = s.collection("milestones")
+        if all.contains(where: { ($0["companion_id"] as? String) == companion && ($0["title"] as? String) == title
+                                 && Date().timeIntervalSince(LocalStore.date($0["at"])) < 86_400 }) { return false }
+        s.saveCollection("milestones", all + [["id": s.nextID("milestone"), "companion_id": companion,
+                                              "title": title, "at": LocalStore.iso(Date())]])
+        return true
     }
 }
 #endif
