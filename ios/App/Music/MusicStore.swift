@@ -77,6 +77,43 @@ enum MusicPlatform: String, CaseIterable, Identifiable {
     }
 }
 
+extension MusicPlatform {
+    /// 只能打开 App、不能直接搜到那首的几家（10-06：Spotify 的 spotify:search: 不认、网页搜索要登录是空白页；
+    /// 网易云 / QQ 音乐没有公开的搜索跳转）：依次试这些，都打不开再走网页
+    var appRoots: [String] {
+        switch self {
+        case .spotify: ["spotify:"]
+        case .netease: ["orpheus://", "orpheuswidget://"]
+        case .qq: ["qqmusic://"]
+        case .apple, .other: []
+        }
+    }
+}
+
+extension OpenURLAction {
+    /// 歌卡上的「去 XX 听」（10-06 Tilia：点了跳的是网页）
+    /// - Apple Music：music:// 直接开那一首，打不开再走网页
+    /// - Spotify / 网易云 / QQ 音乐：复制「歌名 歌手」、打开那个 App，到搜索框粘贴；没装再走网页
+    func song(_ song: SongCardData, on platform: MusicPlatform) {
+        guard let web = platform.link(for: song) else { return }
+        if !platform.appRoots.isEmpty {
+            UIPasteboard.general.string = "\(song.name) \(song.artist)"
+            func tryOpen(_ roots: ArraySlice<String>) {
+                guard let first = roots.first, let url = URL(string: first) else { self(web); return }
+                self(url) { ok in if !ok { tryOpen(roots.dropFirst()) } }
+            }
+            tryOpen(platform.appRoots[...])
+            return
+        }
+        guard web.host?.hasSuffix("music.apple.com") == true,
+              var c = URLComponents(url: web, resolvingAgainstBaseURL: false) else { self(web); return }
+        c.scheme = "music"
+        c.queryItems = c.queryItems?.filter { $0.name == "i" }      // 只留「哪一首」，去掉 uo=4 这类来源参数
+        guard let app = c.url else { self(web); return }
+        self(app) { ok in if !ok { self(web) } }
+    }
+}
+
 @MainActor
 final class MusicStore: ObservableObject {
     static let shared = MusicStore()

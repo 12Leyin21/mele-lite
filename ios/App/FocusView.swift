@@ -144,16 +144,25 @@ struct FocusSheet: View {
     @State private var allowLumiLock = false
     @State private var picking = false
     @State private var starting = false
-    let conversation: UUID?
-    let companion: CompanionDTO?
+    /// 谁陪你专注（10-06 Tilia：好几个联系人时在这里挑；默认是开专注那会儿聊着的 / 最近聊的那个）
+    @State private var chosen: UUID?
+    private let openedIn: UUID?
+    private let openedWith: CompanionDTO?
 
     init(prefill: FocusPrefill, conversation: UUID?, companion: CompanionDTO?) {
         _minutes = State(initialValue: prefill.minutes)
         _label = State(initialValue: prefill.label)
-        self.conversation = conversation
-        self.companion = companion
+        _chosen = State(initialValue: companion?.id)
+        openedIn = conversation
+        openedWith = companion
     }
 
+    private var companion: CompanionDTO? { model.companions.first { $0.id == chosen } ?? openedWith }
+    /// 挑的还是开专注时那个人：用当时的窗口；换了人：用那个人最近的窗口
+    private var conversation: UUID? {
+        guard let c = chosen, c != openedWith?.id else { return openedIn }
+        return model.latestConversation(c)?.id
+    }
     private var name: String { companion?.name ?? "TA" }
 
     var body: some View {
@@ -182,6 +191,11 @@ struct FocusSheet: View {
                 CountdownWheel(minutes: $minutes)
                     .frame(height: 180)
                 TextField("在忙什么（比如：背单词）", text: $label)
+                if model.companions.count > 1 {
+                    Picker("谁陪你", selection: $chosen) {
+                        ForEach(model.companions) { c in Text(c.name).tag(Optional(c.id)) }
+                    }
+                }
             } footer: {
                 if minutes < 15 { Text("最短 15 分钟（苹果的规定）").foregroundStyle(.red) }
             }

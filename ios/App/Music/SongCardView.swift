@@ -34,8 +34,8 @@ struct SongCardView: View {
                         .foregroundStyle(.white.opacity(0.72))
                         .lineLimit(1)
                     if let url = music.platform.link(for: song) {
-                        Button { openURL(url) } label: {
-                            Text("\(music.platform.title) ↗")
+                        Button { openURL.song(song, on: music.platform) } label: {
+                            Text(music.platform.appRoots.isEmpty ? "\(music.platform.title) ↗" : String(localized: "复制歌名去 \(music.platform.title) ↗"))
                                 .font(Typo.sans(11, .semibold))
                                 .foregroundStyle(.white.opacity(0.6))
                         }
@@ -99,6 +99,6 @@ struct SongCardView: View {
             return
         }
         if let p = song.preview, let url = URL(string: p) { preview.toggle(url: url) }
-        else if let url = music.platform.link(for: song) { openURL(url) }
+        else if music.platform.link(for: song) != nil { openURL.song(song, on: music.platform) }
     }
 }

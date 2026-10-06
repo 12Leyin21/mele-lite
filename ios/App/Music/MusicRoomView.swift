@@ -127,6 +127,15 @@ struct MusicRoomView: View {
                 } label: {
                     settingRow(String(localized: "我用什么听歌"), value: music.platform.title + (music.appleLinked ? " ✓" : ""))
                 }
+                // 歌卡点了会怎样（10-06 Tilia：搜索方式写在这儿）
+                Text(music.platform.appRoots.isEmpty
+                     ? (music.platform == .apple ? String(localized: "点歌卡会直接打开「音乐」里的那一首。")
+                                                 : String(localized: "点歌卡会打开这首歌的网页。"))
+                     : String(localized: "\(music.platform.title)没有让别的 App 直接打开某一首歌的办法：点歌卡会先复制「歌名 歌手」，再打开\(music.platform.title)，在搜索框里长按粘贴就能找到。"))
+                    .font(Typo.sans(Typo.Size.caption)).foregroundStyle(theme.inkFaint)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 12)
                 Divider()
                 Stepper(value: Binding(get: { music.link?.picks_n ?? 3 },
                                        set: { n in Task { await music.setPicks(count: n) } }), in: 0...5) {
@@ -261,7 +270,7 @@ private struct PickRow: View {
         .onTapGesture {
             Task {
                 if await music.playWhole(pick.song) { return }
-                if let url = music.platform.link(for: pick.song) { openURL(url) }
+                openURL.song(pick.song, on: music.platform)
             }
         }
     }
@@ -347,7 +356,7 @@ private struct ShelfRow: View {
         Button {
             Task {
                 if await music.playWhole(song.song) { return }
-                if let url = music.platform.link(for: song.song) { openURL(url) }
+                openURL.song(song.song, on: music.platform)
             }
         } label: {
             HStack(spacing: 12) {
