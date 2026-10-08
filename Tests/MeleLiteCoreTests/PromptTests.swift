@@ -24,7 +24,7 @@ import Testing
         #expect(zip(idx, idx.dropFirst()).allSatisfy { $0! < $1! })
         // 每轮会变的不进 system（缓存吃得住），在 context 里
         #expect(!s.contains("年糕") && !s.contains("狗狗") && !s.contains("现在是 20"))
-        #expect(r.context.hasPrefix("现在是 20") && r.context.contains("年糕") && r.context.contains("狗狗"))
+        #expect(r.context.hasPrefix("〔以下是 app 附上的参考，不是对方说的话〕\n现在是 20") && r.context.contains("年糕") && r.context.contains("狗狗"))
     }
 
     @Test func noStickerSectionWhenEmpty() {

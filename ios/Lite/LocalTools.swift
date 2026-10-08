@@ -16,6 +16,10 @@ enum LocalTools {
             t("todo_add", "用途：TA 的待办清单（TA 在 Library → 待办里看得见、能改）。TA 让你提醒 TA 什么（「明早八点提醒我交房租」），或者说要做什么，就记一条。what 做什么；at = 某天某个时间提醒一次，或 time + weekdays = 每天 / 每周几提醒。不填时间 = 只是清单上的一条，不提醒。",
               "Purpose: their to-do list (they can see and edit it in Library → To-do). When they ask you to remind them of something (\"remind me to pay rent at 8am\") or say they need to do something, add it. what = the task; at = a one-time reminder, or time + weekdays = daily / weekly. No time = just a list item, no reminder.",
               #"{"type":"object","properties":{"what":{"type":"string"},"at":{"type":"string","description":"一次性提醒：YYYY-MM-DD HH:MM（TA 那边的时间）"},"time":{"type":"string","description":"每天 / 每周的提醒时间 HH:MM"},"weekdays":{"type":"array","items":{"type":"integer"},"description":"每周哪几天，0 = 周一 … 6 = 周日；不写 = 每天"}},"required":["what"]}"#),
+            // 关系（照服务器 tools.relationship，09-29 Tilia；10-08 搬进 Lite）：只能 TA 先开口
+            t("relationship", "用途：改你们的关系。只在 TA 先开口的时候用：TA 表白、说「我们在一起吧」，你也愿意，就改成 partner；TA 说想回到朋友 / 当家人 / 当搭子，照 TA 说的改。你自己不先提，不试探。",
+              "Purpose: change your relationship. Only when they bring it up first: if they confess or say \"let's be together\" and you want that too, change it to partner; if they want to go back to friends / be like family / be buddies, change it as they say. Never bring it up or test the waters yourself.",
+              #"{"type":"object","properties":{"to":{"type":"string","enum":["friend","partner","family","buddy"],"description":"改成什么关系"}},"required":["to"]}"#),
             t("todo_list", "看 TA 现在的待办（没做完的）。", "List their open to-dos.", #"{"type":"object","properties":{}}"#),
             t("food_add", "用途：TA 的饮食本（TA 自己在饮食页记，你也可以替 TA 记）。TA 说吃了什么、运动了，替 TA 记上；知道大概热量就自己估了填上，不填会自动估。只帮 TA 把数记准，不评判吃多吃少；真吃得明显太少、身体会受不住的时候，像朋友那样关心一句，不说教。",
               "Purpose: their food log (they log it themselves too; you can log for them). When they say what they ate or that they exercised, log it; fill in rough calories if you know them, otherwise they're estimated. Keep the numbers accurate and never judge how much they eat; only if they're clearly eating too little for their body to cope, say something caring like a friend would, no lecturing.",
@@ -114,6 +118,17 @@ enum LocalTools {
                 _ = LocalRooms.patchItem(s, "people", pid, ["created_by": "ai", "updated_by": "ai"], keys: ["created_by", "updated_by"])
             }
             return Outcome(result: "记住了：\(name)", card: card("person", "记住了一个人", "Remembered someone", name))
+        case "relationship":
+            let names = ["friend": "朋友", "partner": "恋人", "family": "家人", "buddy": "搭子"]
+            let to = (a["to"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard let name = names[to] else { return Outcome(result: "不认识这种关系：\(to)（只能是 friend / partner / family / buddy）", card: nil) }
+            guard var c = s.companion(companion) else { return Outcome(result: "没找到这个联系人", card: nil) }
+            var st = c["settings"] as? [String: Any] ?? [:]
+            if st["relationship"] as? String == to { return Outcome(result: "本来就是\(name)，没改。", card: nil) }
+            st["relationship"] = to
+            c["settings"] = st
+            s.saveCompanion(c)
+            return Outcome(result: "改好了：你们现在是\(name)。从下一句起你照这个关系说话；TA 在设置里也看得到、能改回去。", card: nil)
         case "lore_add":
             var body = a
             body["companion_id"] = companion

@@ -146,7 +146,7 @@ enum LocalMap {
         let s = host.store
         guard let cid = comp["id"] as? String else { return false }
         if !force, !places(s, cid).isEmpty { return true }
-        guard let (provider, key) = host.route(for: comp), !LiteConsent.book.needsAsk(provider) else { return false }
+        guard let (provider, key) = host.quietRoute(for: comp), !LiteConsent.book.needsAsk(provider) else { return false }
         guard generating.withLock({ $0.insert(cid).inserted }) else { return false }
         defer { generating.withLock { _ = $0.remove(cid) } }
         let zh = ((comp["settings"] as? [String: Any])?["lang"] as? String ?? "zh") == "zh"
@@ -191,7 +191,7 @@ enum LocalMap {
         guard let comp = s.companion(cid) else { return false }
         guard await ensureWorld(host, comp) else { return false }
         let pls = places(s, cid)
-        guard !pls.isEmpty, let (provider, key) = host.route(for: comp), !LiteConsent.book.needsAsk(provider) else { return false }
+        guard !pls.isEmpty, let (provider, key) = host.quietRoute(for: comp), !LiteConsent.book.needsAsk(provider) else { return false }
         let busyKey = cid + "#day"
         guard generating.withLock({ $0.insert(busyKey).inserted }) else { return false }
         defer { generating.withLock { _ = $0.remove(busyKey) } }

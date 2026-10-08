@@ -134,8 +134,68 @@ enum LocalNotes {
     /// short：日常（线上）模式再贴一句「一两句就够」（10-05 Tilia，照服务器 inject.TEXTS["short"]）
     static func anchor(_ name: String, zh: Bool, short: Bool = false) -> String {
         let n = name.isEmpty ? "Lumi" : name
-        let tail = short ? (zh ? "大多数时候一两句就够，像随手回微信。" : "Most of the time a line or two is enough, like a quick text back.") : ""
+        let tail = short ? (zh ? "大多数时候一两句就够，像随手回微信。" : " Most of the time a line or two is enough, like a quick text back.") : ""
         return (zh ? "〔你是\(n)〕照你自己的性格和口吻回。" : "〔You are \(n)〕Answer in your own personality and voice.") + tail
+    }
+
+    // MARK: 人物卡（10-08 Tilia：工具说明一直写着「卡会自己递过来」，Lite 本机其实从没递过）
+    // 照 server/memory/people.py：认人的词 = 名字、别名、短称呼（男朋友 / 室友），妈妈爸爸这类还认「我妈」「我爸」；
+    // 英文名要整词；按在话里出现的先后，一句最多 3 张；对这个 TA 隐藏的卡不给。同一张卡同一窗口隔两小时再递（像〔TA 那边〕）
+
+    static let kin: Set<String> = ["妈妈", "爸爸", "哥哥", "姐姐", "弟弟", "妹妹", "爷爷", "奶奶", "姥姥", "姥爷", "外婆", "外公"]
+    static let peopleGap: TimeInterval = 2 * 3600
+
+    static func personKeywords(_ p: [String: Any]) -> [String] {
+        var words = [(p["name"] as? String ?? "").trimmingCharacters(in: .whitespaces)] + LocalRooms.keywords(p["aliases"])
+        let rel = (p["relation"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if rel.range(of: #"^(?:[一-鿿]{1,4}|[A-Za-z][A-Za-z ]{0,15})$"#, options: .regularExpression) != nil { words.append(rel) }
+        words += words.filter { kin.contains($0) }.map { "我" + String($0.prefix(1)) }
+        var out: [String] = []
+        for w in words where !w.isEmpty && !out.contains(w) { out.append(w) }
+        return out
+    }
+
+    /// 词在话里第一次出现的位置；纯英文 / 数字的词要整词（Oak 不能撞上 soak）
+    static func mentions(_ word: String, _ text: String) -> Int? {
+        let k = word.lowercased(), t = text.lowercased()
+        let pattern = k.range(of: #"^[a-z0-9 .'-]+$"#, options: .regularExpression) != nil
+            ? "(?<![a-z0-9])" + NSRegularExpression.escapedPattern(for: k) + "(?![a-z0-9])"
+            : NSRegularExpression.escapedPattern(for: k)
+        guard let r = t.range(of: pattern, options: .regularExpression) else { return nil }
+        return t.distance(from: t.startIndex, to: r.lowerBound)
+    }
+
+    static func peopleLines(_ s: LocalStore, companion cid: String, conversation conv: String, text: String, zh: Bool) -> [String] {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return [] }
+        var shown = (s.read("people-shown.json") as? [String: [String: String]]) ?? [:]
+        let mine = shown[conv] ?? [:]
+        var hits: [(Int, [String: Any])] = []
+        for p in s.collection("people") where !((p["hidden_from"] as? [String]) ?? []).contains(cid) {
+            let id = String(p["id"] as? Int ?? 0)
+            if let at = mine[id], Date().timeIntervalSince(LocalStore.date(at)) < peopleGap { continue }
+            if let first = personKeywords(p).compactMap({ mentions($0, text) }).min() { hits.append((first, p)) }
+        }
+        let picked = hits.sorted { $0.0 < $1.0 }.prefix(3).map(\.1)
+        guard !picked.isEmpty else { return [] }
+        var now = mine
+        for p in picked { now[String(p["id"] as? Int ?? 0)] = LocalStore.iso(Date()) }
+        shown[conv] = now
+        s.write("people-shown.json", shown)
+        return picked.map { renderPerson($0, zh: zh) }
+    }
+
+    /// 跟 server/memory/people.py render_person 同一个样子
+    static func renderPerson(_ p: [String: Any], zh: Bool) -> String {
+        let name = p["name"] as? String ?? ""
+        let alias = LocalRooms.keywords(p["aliases"]).filter { $0 != name }
+        let head = name + (alias.isEmpty ? "" : (zh ? "（也叫 \(alias.joined(separator: " / "))）" : " (aka \(alias.joined(separator: " / ")))"))
+        var parts: [String] = []
+        for (key, label) in [("relation", zh ? "是谁：" : "Who: "), ("facts", zh ? "要记得：" : "Remember: "), ("impression", zh ? "你的印象：" : "Your impression: ")] {
+            let v = (p[key] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if !v.isEmpty { parts.append(label + v) }
+        }
+        return zh ? "〔人物卡 · \(head)〕" + parts.joined(separator: "｜")
+                  : "[Person card · \(head)]" + (parts.isEmpty ? "" : " ") + parts.joined(separator: " | ")
     }
 
     /// 它自己用工具记的（钱包 / 饮食）：不用再告诉它

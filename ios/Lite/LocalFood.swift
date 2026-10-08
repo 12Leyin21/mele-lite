@@ -216,7 +216,7 @@ enum LocalFood {
         Task.detached {
             let s = host.store
             guard let comp = s.companions.first(where: { c in host.route(for: c).map { !LiteConsent.book.needsAsk($0.0) } ?? false }),
-                  let (provider, key) = host.route(for: comp),
+                  let (provider, key) = host.quietRoute(for: comp),
                   let e = s.collection("food").first(where: { ($0["id"] as? Int) == id }) else { return }
             let zh = ((comp["settings"] as? [String: Any])?["lang"] as? String ?? "zh") == "zh"
             let ex = (e["meal"] as? String) == exercise
@@ -240,7 +240,7 @@ enum LocalFood {
                                   turns: turns, maxTokens: 800)
             var out = ""
             do { for try await ev in makeClient(provider, key: key).stream(req) { if case .text(let t) = ev { out += t } } } catch { return }
-            guard let r = out.range(of: #"\{.*\}"#, options: .regularExpression),
+            guard let r = out.range(of: #"(?s)\{.*\}"#, options: .regularExpression),     // (?s)：模型常把 JSON 分好几行写，不加 . 跨不了行
                   let d = try? JSONSerialization.jsonObject(with: Data(out[r].utf8)) as? [String: Any],
                   let kcal = num(d["kcal"]), kcal > 0 else { return }
             var all = s.collection("food")

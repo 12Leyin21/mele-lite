@@ -115,7 +115,7 @@ enum LocalRooms3 {
                 for i in all.indices where ids.contains(all[i]["id"] as? Int ?? -1) { all[i]["looking"] = false }
                 s.saveCollection("album", all)
             }
-            guard let comp = s.companion(companion), let (provider, key) = host.route(for: comp),
+            guard let comp = s.companion(companion), let (provider, key) = host.quietRoute(for: comp),
                   !LiteConsent.book.needsAsk(provider) else { return }
             try? await Task.sleep(for: .seconds(20))
             let zh = ((comp["settings"] as? [String: Any])?["lang"] as? String ?? "zh") == "zh"
@@ -279,7 +279,7 @@ enum LocalRooms3 {
         Task.detached {
             let s = host.store
             for comp in s.companions {
-                guard let cid = comp["id"] as? String, let (provider, key) = host.route(for: comp),
+                guard let cid = comp["id"] as? String, let (provider, key) = host.quietRoute(for: comp),
                       !LiteConsent.book.needsAsk(provider) else { continue }
                 guard let m = s.collection("moments").first(where: { ($0["id"] as? Int) == id }) else { return }
                 let comments = m["comments"] as? [[String: Any]] ?? []

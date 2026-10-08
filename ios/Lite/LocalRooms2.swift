@@ -131,7 +131,7 @@ enum LocalRooms2 {
         Task.detached {
             let s = host.store
             guard let comp = s.companions.first(where: { c in host.route(for: c).map { !LiteConsent.book.needsAsk($0.0) } ?? false }),
-                  let (provider, key) = host.route(for: comp) else { return }
+                  let (provider, key) = host.quietRoute(for: comp) else { return }
             let zh = ((comp["settings"] as? [String: Any])?["lang"] as? String ?? "zh") == "zh"
             let ask = zh ? "这是一张聊天用的表情包。用一句话（20 字以内）说它是什么、表达什么情绪，只写这一句。"
                          : "This is a chat sticker. In one short line (under 12 words), say what it shows and the feeling it expresses. Write only that line."

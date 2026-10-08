@@ -47,6 +47,8 @@ public struct Contact: Codable, Identifiable, Equatable, Sendable {
     public var offlineLife: Bool?
     /// 说话规矩（10-05 Tilia：用户能改出厂的说话风格）：线上那段「说多长、怎么接话」换成这个；nil / 空 = 出厂
     public var talkRules: String?
+    /// 关系包（照服务器 manuals/<语言>/relationship/，10-08）：主身份「我跟 TA 是什么关系、怎么相处」那一段，放在底子后面
+    public var relationshipPack: String?
     /// 出厂的说话规矩（设置页「看出厂的」用）
     public static func factoryTalk(_ lang: Lang) -> String { Resources.mode("talk", lang) }
 

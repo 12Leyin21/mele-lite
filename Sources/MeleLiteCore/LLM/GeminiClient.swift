@@ -48,7 +48,7 @@ struct GeminiClient: LLMClient {
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "content-type")
         req.setValue(key, forHTTPHeaderField: "x-goog-api-key")
-        req.httpBody = try? JSONSerialization.data(withJSONObject: body(r))
+        req.httpBody = try? JSONSerialization.data(withJSONObject: body(r), options: [.sortedKeys])   // 键顺序固定：Swift 字典每次排法不一样，工具说明一变前缀就对不上、缓存全丢（10-08 Tilia：命中只有两三成）
         let st = StreamState()
         return HTTPStream.run(req, session: session, model: config.model, state: st, parse: { payload in
             let o = try HTTPStream.json(payload)

@@ -44,7 +44,7 @@ TEXTS = {
         "remembered": "〔You said you'd remember〕Last turn you said (or thought) you'd remember something but never called memory_remember — it only lives in the chat log. Save it now.",
         "long_mode": "〔In-person mode is on〕Write this reply out in full; no need to keep it short. Put actions and expressions in *single asterisks* (shown in italics) and words you want to stress in **double asterisks** (shown in bold); no other formatting.",
         "anchor": "〔You are {name}〕Answer in your own personality and voice.",
-        "short": "Most of the time a line or two is enough, like a quick text back.",
+        "short": " Most of the time a line or two is enough, like a quick text back.",
     },
 }
 

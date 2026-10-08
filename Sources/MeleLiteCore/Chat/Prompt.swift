@@ -31,7 +31,9 @@ public enum Prompt {
     /// 每轮会变的：现在几点、世界书命中、翻到的
     static func context(_ i: PromptInput) -> String {
         let zh = i.lang == .zh
-        var parts = [(zh ? "现在是 " : "It's now ") + clock(i.now, i.timeZone, i.lang)]
+        // 开头一行跟服务器 context.HEADER 一样：后面这些是 app 附的，不是对方说的（10-08：Lite 之前没这行）
+        var parts = [(zh ? "〔以下是 app 附上的参考，不是对方说的话〕\n" : "〔Notes attached by the app — not the user's words〕\n")
+                     + (zh ? "现在是 " : "It's now ") + clock(i.now, i.timeZone, i.lang)]
         if !i.loreHits.isEmpty {
             parts.append((zh ? "## 世界书\n" : "## Lorebook\n") + i.loreHits.map { "### \($0.title)\n\($0.content)" }.joined(separator: "\n\n"))
         }
@@ -42,12 +44,18 @@ public enum Prompt {
     static func system(_ i: PromptInput) -> String {
         let zh = i.lang == .zh
         let c = i.contact, me = i.identity
-        var parts = [Resources.text("base", i.lang)]
+        var base = Resources.text("base", i.lang)
+        if c.mode == .offline {          // 线下：底子第一句不写死「在手机上」（照服务器 OFFLINE_OPENING）
+            base = base.replacingOccurrences(of: zh ? offlineOpening.zh.0 : offlineOpening.en.0, with: zh ? offlineOpening.zh.1 : offlineOpening.en.1)
+        }
+        var parts = [base]
+        let pack = me.isMain ? c.relationshipPack?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "" : ""
+        if !pack.isEmpty { parts.append(pack) }
         parts.append((zh ? "你是 \(c.name)。\n" : "You are \(c.name).\n") + c.persona)
         var who: [String] = []
         if !me.userName.isEmpty { who.append((zh ? "名字：" : "Name: ") + me.userName) }
         if !me.aboutMe.isEmpty { who.append((zh ? "关于 TA：" : "About them: ") + me.aboutMe) }
-        if !me.relationship.isEmpty { who.append((zh ? "你们的关系：" : "Your relationship: ") + me.relationship) }
+        if pack.isEmpty, !me.relationship.isEmpty { who.append((zh ? "你们的关系：" : "Your relationship: ") + me.relationship) }
         if !who.isEmpty { parts.append((zh ? "## 对面这个人\n" : "## The person you're talking to\n") + who.joined(separator: "\n")) }
         // 线上那段的「你有自己的一天」看线下生活开关（10-05 Tilia：谈人机恋的有人不喜欢 AI 角色扮演，默认关）
         parts.append(c.mode == .online
@@ -60,6 +68,12 @@ public enum Prompt {
         if !caps.isEmpty { parts.append((zh ? "## 你的表情包\n" : "## Your stickers\n") + caps.map { "- " + $0 }.joined(separator: "\n")) }
         return parts.joined(separator: "\n\n")
     }
+
+    static let offlineOpening = (
+        zh: ("你是一个住在手机 app 里的 AI 伙伴，陪 TA 过日子：记得 TA 说过的事，帮 TA 把生活理顺，也会主动关心 TA。",
+             "你是 TA 的 AI 伙伴，陪 TA 过日子：记得 TA 说过的事，也会主动关心 TA。你们现在在哪、是见面还是隔着屏幕，照人设里的场景和你们的对话来。"),
+        en: ("You are an AI companion living in a phone app, keeping them company day to day: you remember what they tell you, help them keep life in order, and check in on them.",
+             "You are their AI companion, keeping them company day to day: you remember what they tell you and check in on them. Where you are right now, and whether you're together or talking through a screen, follows the scenario in your character and your conversation."))
 
     static func clock(_ d: Date, _ tz: TimeZone, _ lang: Lang) -> String {
         let f = DateFormatter()
@@ -115,5 +129,46 @@ enum Resources {
             out[cur, default: ""] += (out[cur, default: ""].isEmpty ? "" : "\n") + line
         }
         return out[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+}
+
+/// Lite 版说明书（10-08 Tilia：开关，默认开）。照服务器 manuals/<语言>/lumi.md 改的：只讲 Lite 真会递给它的纸条；
+/// 记忆库那几条只在接了记忆库时给（memoryTools = 记一条、翻一下的工具名）；说话那几条只在线上给（线下有自己的规矩）；
+/// 〔现在〕那行只在线下生活开着时给（10-08 真 key：关着也写这行，它反而老提自己在天台）
+public enum Handbook {
+    public static func text(zh: Bool, online: Bool, life: Bool, memoryTools: (remember: String, search: String)?) -> String {
+        let lang: Lang = zh ? .zh : .en
+        var notes = section("notes", lang)
+        if !life {
+            notes = notes.split(separator: "\n", omittingEmptySubsequences: false)
+                .filter { !$0.contains("〔现在〕") && !$0.contains("[Right now]") }.joined(separator: "\n")
+        }
+        var parts = [notes]
+        if let m = memoryTools {
+            parts.append(section("memory", lang).replacingOccurrences(of: "{remember}", with: m.remember)
+                .replacingOccurrences(of: "{search}", with: m.search))
+        }
+        if online { parts.append(section("talk", lang)) }
+        return parts.filter { !$0.isEmpty }.joined(separator: "\n\n")
+    }
+
+    static func section(_ key: String, _ lang: Lang, file: String = "handbook") -> String {
+        let all = Resources.text(file, lang)
+        var out: [String: String] = [:], cur = ""
+        for line in all.split(separator: "\n", omittingEmptySubsequences: false) {
+            if line.hasPrefix("["), line.hasSuffix("]") { cur = String(line.dropFirst().dropLast()); continue }
+            out[cur, default: ""] += (out[cur, default: ""].isEmpty ? "" : "\n") + line
+        }
+        return out[key]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+}
+
+/// 关系包（照 server/brain/persona.relationship_text）：friend / partner / family / buddy / card，别的字 = 自定义（{rel} 换成它），空着 = 朋友
+public enum Relationship {
+    public static let known = ["friend", "partner", "family", "buddy", "card"]
+    public static func pack(_ rel: String, zh: Bool) -> String {
+        let r = rel.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = known.contains(r) ? r : (r.isEmpty ? "friend" : "custom")
+        return Handbook.section(key, zh ? .zh : .en, file: "relationship").replacingOccurrences(of: "{rel}", with: r)
     }
 }

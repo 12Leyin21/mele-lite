@@ -175,6 +175,14 @@ final class LocalHost: @unchecked Sendable {
         }
     }
 
+    /// 后台小活（估热量、看表情包、排行程、看相册……）：只要一小段 JSON / 一句话，不让模型先想。
+    /// 想的那段会吃掉不大的 max_tokens，正文空了就静悄悄失败（10-08：饮食一直不估热量）
+    func quietRoute(for companion: [String: Any]) -> (ProviderConfig, String)? {
+        guard var r = route(for: companion) else { return nil }
+        r.0.thinking = false
+        return r
+    }
+
     /// 加钥匙时选模型（照服务器 llm/catalog.py，外加 OpenAI / Gemini 几个常用的）
     static let catalog: [[String: Any]] = [
         ["id": "deepseek-flash", "provider": "deepseek", "label": "DeepSeek-V4.1-Flash", "price_in": 0.3, "price_cache_read": 0.006, "price_out": 1.2, "thinking": true],
@@ -196,6 +204,7 @@ final class LocalHost: @unchecked Sendable {
         "tool_reminder_every": 5, "thinking_style_text": "", "injections": [Any](), "patrol_level": "mid",
         "heartbeat_on": true, "morning_on": true, "sleep_from": "00:00", "sleep_to": "08:00", "patrol_overrides": [String: Any](),
         "relationship": "", "cache_keepalive": false, "diary_on": true, "offline_life": false, "talk_rules": "", "diary_chars": 600, "voice_mode": "sometimes",
+        "full_handbook": true,      // Lite 说明书开关（10-08 Tilia：默认开）
         "voice_id": "", "voice_name": "",
     ]
 
@@ -282,7 +291,7 @@ final class LocalHost: @unchecked Sendable {
     private func syncAdvanced(_ id: String) -> LocalResponse {
         guard let src = store.companion(id)?["settings"] as? [String: Any] else { return .error(404, "") }
         let adv = ["careful_read", "heartbeat_on", "injections", "ledger_same_as_chat", "max_bubbles", "patrol_overrides",
-                   "recall_probe", "reply_wait", "sentinels", "thinking", "thinking_mode", "thinking_style_text", "tool_reminder_every"]
+                   "recall_probe", "reply_wait", "sentinels", "thinking", "thinking_mode", "thinking_style_text", "tool_reminder_every", "full_handbook"]
         var n = 0
         for var c in store.companions where (c["id"] as? String) != id {
             var s = c["settings"] as? [String: Any] ?? [:]

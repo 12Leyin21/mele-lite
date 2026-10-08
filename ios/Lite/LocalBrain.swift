@@ -328,17 +328,27 @@ final class LocalBrain: @unchecked Sendable {
         // 现在说明照服务器那套（用途 + 什么时候用 + 悄悄做），这里只说一声在哪看
         req.system += zh ? "\n\n你有几样工具（记账、待办、饮食、人物卡、世界书、远事、朋友圈、书架、塔罗、发歌），每样什么时候用写在它自己的说明里。用完照样像平时一样跟 TA 说话。"
                          : "\n\nYou have a few tools (wallet, to-dos, food log, people cards, lorebook, dates, your feed, bookshelf, tarot, songs); when to use each is in its own description. Afterwards, talk to them as usual."
+        // 说明书（10-08 Tilia：开关，默认开）：讲清每轮递来的小纸条是什么；接了记忆库再加怎么记事；线上再补几条说话的
+        if settings["full_handbook"] as? Bool ?? true {
+            let mem = box.memory.map { (remember: MCPToolNames.exposed($0.slug, "remember"), search: MCPToolNames.exposed($0.slug, "search")) }
+            req.system += "\n\n" + Handbook.text(zh: zh, online: contact.mode == .online, life: contact.offlineLife ?? false, memoryTools: mem)
+        }
         if !box.specs.isEmpty {
             req.system += zh ? "另外还有用户接进来的工具（名字带前缀），描述里写了来自哪里。"
                              : " There are also tools the user connected (prefixed names); each description says where it comes from."
         }
+        let pronoun: String = switch settings["user_pronoun"] as? String {
+        case "she": zh ? "她" : "she"
+        case "he": zh ? "他" : "he"
+        default: zh ? "TA" : "they"
+        }
+        let personaRaw = comp["persona"] as? [String: Any] ?? [:]
+        let custom = !((personaRaw["imported"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                       && (personaRaw["personality"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         if monologue {
-            let pronoun: String = switch settings["user_pronoun"] as? String {
-            case "she": zh ? "她" : "she"
-            case "he": zh ? "他" : "he"
-            default: zh ? "TA" : "they"
-            }
-            req.system += "\n\n" + Monologue.rules(zh: zh, pronoun: pronoun, style: settings["thinking_style_text"] as? String ?? "")
+            // 10-08：照服务器的整份独白规矩 + Tilia写的出厂思考风格 + 范文（之前本机只有三行简化版，独白又短又在排练回复）
+            req.system += "\n\n" + Monologue.rules(zh: zh, pronoun: pronoun, style: settings["thinking_style_text"] as? String ?? "",
+                                                   userName: identity.userName, character: custom ? contact.name : "")
             req.context += "\n\n" + Monologue.hook(zh: zh, pronoun: pronoun)
         }
         // 搬家笔记（10-05，没接记忆库时从 ChatGPT / Claude 搬来的那段）：不变的，放账本前面
@@ -353,9 +363,17 @@ final class LocalBrain: @unchecked Sendable {
             notes += [LocalNotes.foodNote(host.store, zh: zh), LocalNotes.walletNote(host.store, zh: zh),
                       LocalNotes.datesLines(host.store, companion: cidNow, conversation: conv, zh: zh)]
         }
+        // 人物卡：TA 这句话里提到谁就递谁的卡；人物卡归记忆库管的时候记忆库自己会递，手机这份不重复
+        if altInfo == nil && !incognito && !hiding.contains("person_save") {
+            notes += LocalNotes.peopleLines(host.store, companion: cidNow, conversation: conv, text: lastUser, zh: zh)
+        }
         for line in notes where !line.isEmpty { req.context += "\n\n" + line }
         req.context += "\n\n" + LocalNotes.anchor(contact.name, zh: zh,
                                                  short: contact.mode == .online && (contact.talkRules ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)      // 人设锚：离它开口最近的一行
+        let sentinelLines = Self.sentinels(settings, zh: zh, monologue: monologue, pronoun: pronoun, userName: identity.userName,
+                                           character: custom ? contact.name : "", provider: provider, memory: box.memory,
+                                           messages: host.store.messages(conv))
+        for line in sentinelLines { req.context += "\n\n" + line }      // 思考风格压在最后、离它开口最近（照服务器 tail）
         var text = "", thinking = ""
         var cards: [[String: Any]] = []
         let started = Date()                            // 「思考了 x 秒」：从开口到说完（含中间调工具，10-05）
@@ -381,6 +399,7 @@ final class LocalBrain: @unchecked Sendable {
                     let out = if let via = box.route[c.name] { await host.mcp.run(c, via: via, zh: zh) }
                               else { await LocalTools.run(c, host: host, companion: cid, zh: zh) }
                     results.append(ToolResult(id: c.id, name: c.name, content: out.result))
+                    if c.name == "relationship", out.result.hasPrefix("改好了") { emit(conv, ["type": "relationship"]) }   // 名字旁的图标换一下（照服务器，不挂卡）
                     if let card = out.card {
                         cards.append(card)
                         var ev: [String: Any] = ["type": "card", "kind": card["kind"] ?? "", "text": card["text"] ?? "", "private": false]
@@ -546,7 +565,9 @@ final class LocalBrain: @unchecked Sendable {
             let mine = { (k: String) in (p[k] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines) }
             let personality = mine("personality").isEmpty ? Self.factory(zh)["personality"]! : mine("personality")
             let style = mine("style").isEmpty ? Self.factory(zh)["style"]! : mine("style")
-            persona = (zh ? "性格：" : "Personality: ") + personality + "\n\n" + (zh ? "说话方式：" : "How you talk: ") + style
+            // 三个滑块（温暖 / 主动 / 幽默）每档一句接在性格后面，照 server/brain/persona.py TONE（10-08：之前本机没接上）
+            let tone = Self.toneLines(s, zh: zh)
+            persona = (zh ? "性格：" : "Personality: ") + personality + (tone.isEmpty ? "" : "\n" + tone) + "\n\n" + (zh ? "说话方式：" : "How you talk: ") + style
         }
         if let g = p["gender"] as? String, !g.isEmpty {
             persona += zh ? "\n\n性别：\(g == "female" ? "女" : g == "male" ? "男" : g)" : "\n\nGender: \(g)"
@@ -555,6 +576,7 @@ final class LocalBrain: @unchecked Sendable {
                               persona: persona, mode: (s["long_mode"] as? Bool ?? false) ? .offline : .online, provider: provider)
         contact.offlineLife = s["offline_life"] as? Bool == true || s["long_mode"] as? Bool == true
         contact.talkRules = s["talk_rules"] as? String
+        contact.relationshipPack = Relationship.pack(s["relationship"] as? String ?? "", zh: zh)    // 关系包（10-08 照服务器搬）
         let call = (p["call_user"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         contact.identities[0].userName = call.isEmpty ? (s["user_name"] as? String ?? "") : call
         contact.identities[0].relationship = relationshipText(s["relationship"] as? String ?? "", zh: zh)
@@ -581,6 +603,67 @@ final class LocalBrain: @unchecked Sendable {
                 return text
             }
         }.joined(separator: "\n\n")
+    }
+
+    /// 哨兵（10-08 Tilia：Lite 也要；照 server/brain/inject.py reminder_lines，措辞一样）。
+    /// - 思考风格：用模型自己的思考时每轮贴（手写独白时已经在规矩里了）；没贴出厂那份、又是中文，贴〔用中文想〕
+    /// - 提醒用工具 / 〔记住了〕：说的是记忆库的工具，只在接了记忆库（MCP）时贴
+    static func sentinels(_ settings: [String: Any], zh: Bool, monologue: Bool, pronoun: String, userName: String, character: String,
+                          provider: ProviderConfig, memory: LocalMCP.Server?, messages: [[String: Any]]) -> [String] {
+        let on = settings["sentinels"] as? [String: Any] ?? [:]
+        func enabled(_ k: String) -> Bool { on[k] as? Bool ?? true }
+        var out: [String] = []
+        let thinkingOn = settings["thinking"] as? Bool ?? true
+        if thinkingOn && !monologue {
+            let own = (settings["thinking_style_text"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let deepseek = provider.baseURL?.contains("deepseek") == true
+            if enabled("thinking_style") {
+                out.append(own.isEmpty ? (zh ? "〔想事的时候〕" : "〔How I think〕") + "\n"
+                           + Monologue.factoryStyle(zh: zh, pronoun: pronoun, userName: userName, character: character, noDraft: deepseek) : own)
+            }
+            if zh && !(enabled("thinking_style") && own.isEmpty) { out.append("〔用中文想〕心里想事也用中文，跟说出口的话用同一种语言。") }
+        }
+        guard let memory else { return out }
+        let remember = MCPToolNames.exposed(memory.slug, "remember"), search = MCPToolNames.exposed(memory.slug, "search")
+        let turnNo = messages.filter { ($0["role"] as? String) == "user" }.count
+        let every = max(1, settings["tool_reminder_every"] as? Int ?? 5)
+        if enabled("tool_reminder") && turnNo % every == 0 {
+            out.append(zh ? "〔用手〕一年后还想记得的，记下来（\(remember)）；拿不准的先翻（\(search)）。"
+                          : "〔Use your tools〕What you'd still want to remember in a year, save it (\(remember)); check before guessing (\(search)).")
+        }
+        if enabled("remembered"), let last = messages.last(where: { ($0["role"] as? String) == "assistant" }) {
+            let said = (last["text"] as? String ?? "") + "\n" + (last["thinking"] as? String ?? "")
+            let saved = (last["cards"] as? [[String: Any]] ?? []).contains {
+                ($0["kind"] as? String) == "memory" && ($0["text"] as? String ?? "").hasSuffix("remember")
+            }
+            if !saved, said.range(of: promise, options: [.regularExpression, .caseInsensitive]) != nil {
+                out.append(zh ? "〔记住了〕上一轮你说了（或者心里想了）「记住了」「记一下」这类话，却没有真的调 \(remember)——那件事现在只活在聊天记录里，现在补记。"
+                              : "〔You said you'd remember〕Last turn you said (or thought) you'd remember something but never called \(remember) — it only lives in the chat log. Save it now.")
+            }
+        }
+        return out
+    }
+    // 跟 server/brain/inject.py 的 _PROMISE 同一份
+    static let promise = #"记住[了啦]|记下[了啦]|记着[了呢]|我记着|我会记得|我记住|学到了|已经记|记一下|记下来|值一条记忆|I'?ll remember|I will remember|noted|got it saved"#
+
+    /// 三个滑块那几句（跟 server/brain/persona.py 的 TONE 一字不差；「刚好」那档性格里已经有了，只有幽默另加一句）
+    static func toneLines(_ s: [String: Any], zh: Bool) -> String {
+        let t: [String: [String: String]] = zh ? [
+            "warmth": ["low": "我的关心是淡淡的：记在心里，不常挂在嘴上。",
+                       "high": "我的关心很外露：会多问一句、多叮嘱一句，愿意把暖意说出来。"],
+            "initiative": ["low": "我不太主动开话题，多半等对方开口。",
+                           "high": "我会主动找话题，主动问起对方之前提过的事。"],
+            "humor": ["low": "我很少开玩笑，说话偏认真。",
+                      "mid": "我偶尔开个轻的玩笑，点到为止。",
+                      "high": "我爱逗对方，接梗、打趣，但分得清什么时候该认真。"]] : [
+            "warmth": ["low": "My care is understated: I keep it in mind more than I say it.",
+                       "high": "My care shows: I ask one more question, add one more reminder, and I'm happy to say it warmly."],
+            "initiative": ["low": "I don't often start topics; I usually wait for them to speak first.",
+                           "high": "I bring up topics myself and ask about things they mentioned before."],
+            "humor": ["low": "I rarely joke; I lean serious.",
+                      "mid": "I make the occasional light joke and leave it there.",
+                      "high": "I love teasing them — riffing and joking — but I know when to be serious."]]
+        return ["warmth", "initiative", "humor"].compactMap { k in t[k]?[s[k] as? String ?? "mid"] }.joined()
     }
 
     /// 出厂性格（Tilia 09-27 写的，跟 server/brain/persona.py 的 FACTORY 一字不差；改一边要改另一边）

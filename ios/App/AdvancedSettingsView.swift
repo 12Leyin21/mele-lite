@@ -114,15 +114,28 @@ struct AdvancedSettingsView: View {
                 .needsHost()
             }
 
+            if Lite.local {       // 说明书开关（10-08 Tilia：默认开）
+                Tile {
+                    Toggle(isOn: store.s("full_handbook", true)) {
+                        row("完整说明书", "开着：告诉 TA 每轮递过去的小纸条（饮食、日子、在听……）是什么、怎么接；接了记忆库再加怎么记事")
+                    }
+                } header: { GlassHeader(String(localized: "说明书")) } footer: {
+                    Text("关着只留最简短的规矩。开着每轮多一千字左右，大部分走缓存，多花得很少。")
+                }
+            }
+
             Tile {
                 Toggle(isOn: store.s("ledger_same_as_chat", false)) { row("账本用聊天的模型", "默认用同一家便宜的写，开了更准也更贵") }
+                    .hiddenInLite()          // Lite 本机的账本钥匙在上面「回声」那格
                 ForEach([("thinking_style", "提醒思考风格", "隔几轮提醒 TA 想事的样子"),
                          ("tool_reminder", "提醒用工具", "隔几轮提醒 TA 该记的记下来"),
                          ("remembered", "〔记住了〕", "TA 记下东西后告诉 TA 一声")], id: \.0) { key, title, sub in
                     Toggle(isOn: sentinel(key)) { row(title, sub) }
                 }
-            } header: { GlassHeader(String(localized: "哨兵")) }
-            .needsHost()
+            } header: { GlassHeader(String(localized: "哨兵")) } footer: {
+                // 10-08 Tilia：Lite 也要哨兵。后两个说的是记忆库的工具，没接记忆库时不贴
+                if Lite.local { Text("提醒思考风格在 TA 用模型自己的思考时生效（手写独白已经带着了）。提醒用工具、〔记住了〕要接上记忆库才会贴。") }
+            }
 
             Tile {
                 let inj = injections
