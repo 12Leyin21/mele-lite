@@ -38,7 +38,24 @@ def effective_mode(settings: Settings, info: ModelInfo | None) -> str:
 
 
 def split_monologue(text: str) -> tuple[str, str]:
-    """(独白, 正文)。没写独白就是 ("", 原文)。"""
+    """(独白, 正文)。没写独白就是 ("", 原文)。
+    模型偶尔把独白写两遍（10-09 Tilia在 Lite 上遇到：同一段 [独白]…[/独白] 出现两次，第二段漏进正文）：
+    切完第一段，正文里还有成对的就接着切，内容一样的只留一份。跟 MeleLiteCore Monologue.split 同一个规矩"""
+    mono, body = _split_once(text)
+    if not mono:
+        return mono, body
+    monos = [mono]
+    while len(_TAG.findall(body)) >= 2:
+        more, rest = _split_once(body)
+        if rest == body:
+            break
+        if more and more not in monos:
+            monos.append(more)
+        body = rest
+    return "\n\n".join(monos), body
+
+
+def _split_once(text: str) -> tuple[str, str]:
     text = text or ""
     tags = list(_TAG.finditer(text))
     if not tags:

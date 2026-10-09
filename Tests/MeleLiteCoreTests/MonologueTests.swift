@@ -38,3 +38,18 @@ import Testing
         #expect(!Monologue.rules(zh: false, pronoun: "they", style: "").isEmpty)
     }
 }
+
+@Suite struct MonologueTwiceTests {
+    @Test func duplicatedMonologueDoesNotLeak() {
+        let raw = "[独白]\n她走了，去忙。\n[/独白]\n\n[独白]\n她走了，去忙。\n[/独白]\n\n去忙吧。\n\n我在。"
+        let (mono, body) = Monologue.split(raw)
+        #expect(mono == "她走了，去忙。")
+        #expect(body == "去忙吧。\n\n我在。")
+    }
+
+    @Test func twoDifferentMonologuesBothKept() {
+        let (mono, body) = Monologue.split("[独白]甲[/独白]\n\n[独白]乙[/独白]\n\n好。")
+        #expect(mono == "甲\n\n乙")
+        #expect(body == "好。")
+    }
+}

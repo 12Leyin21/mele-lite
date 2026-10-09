@@ -12,7 +12,27 @@ public enum Monologue {
     static let quoted = try! NSRegularExpression(pattern: #"「[^」]*」|“[^”]*”|"[^"]*""#)
 
     /// (独白, 正文)。没写独白就是 ("", 原文)。
+    /// 模型偶尔把独白写两遍（10-09 Tilia：DeepSeek 一轮里同一段 [独白]…[/独白] 出现两次，第二段原样漏进了正文）：
+    /// 切完第一段，正文里还有成对的就接着切，内容一样的只留一份
     public static func split(_ text: String) -> (monologue: String, body: String) {
+        var (mono, body) = splitOnce(text)
+        guard !mono.isEmpty else { return (mono, body) }
+        var monos = [mono]
+        while pairCount(body) >= 2 {
+            let (more, rest) = splitOnce(body)
+            guard rest != body else { break }
+            if !more.isEmpty && !monos.contains(more) { monos.append(more) }
+            body = rest
+        }
+        mono = monos.joined(separator: "\n\n")
+        return (mono, body)
+    }
+
+    static func pairCount(_ text: String) -> Int {
+        tag.numberOfMatches(in: text, range: NSRange(location: 0, length: (text as NSString).length))
+    }
+
+    static func splitOnce(_ text: String) -> (monologue: String, body: String) {
         let ns = text as NSString
         let tags = tag.matches(in: text, range: NSRange(location: 0, length: ns.length))
         func trim(_ s: String) -> String { s.trimmingCharacters(in: .whitespacesAndNewlines) }
