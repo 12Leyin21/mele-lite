@@ -98,7 +98,7 @@ final class AppTheme: ObservableObject {
                                                        Color(red: 0.66, green: 0.73, blue: 0.79)],
                                               startPoint: .top, endPoint: .bottom)
 
-    // 设计稿色值换算成 HSB（deep: hsl(h,56%,75%) / soft: hsl(h,65%,86%)）
+    // Tilia设计稿的色值换算成 HSB（deep: hsl(h,56%,75%) / soft: hsl(h,65%,86%)）
     var accent: Color { tone(0.34, 0.88) }
     var accentSoft: Color { tone(0.19, 0.95) }
     var accentDeep: Color { tone(0.50, 0.66) }

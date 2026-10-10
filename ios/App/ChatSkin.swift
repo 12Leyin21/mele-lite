@@ -1,7 +1,7 @@
 import SwiftUI
 
 /*
- 方向契约 · 聊天页（2026-08-06，Tilia以四张参考图钉定，未掷骰）
+ 方向契约 · 聊天页（2026-08-06，照Tilia自己画的四张设计图定的）
 
  THESIS：聊天页是一个房间，不是一个界面。屏幕上只该有三样东西——他说的话、
    我说的话、以及说话用的那支笔。拒绝的是这个品类的默认排布：顶部一条实心
@@ -17,8 +17,7 @@ import SwiftUI
    右上 🔍 与 ⋯；中间是从下往上贴底的消息流，气泡最大宽度留出 40pt 让边；
    底部一支加号、一支麦克风、一条无边输入行、一个发送键。没有分隔线，
    没有标签栏。
- FORM：胶囊头 + 无框消息场，序列里第一位（她的参考图直接指定）。SEED：pinned
-   by brief —— 用户以参考图钉定方向，按 new-work.md 第 49 行跳过掷骰。
+ FORM：胶囊头 + 无框消息场（Tilia自己画的设计图直接定的）。
  FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, and DESIGN.md
  */
 
@@ -169,7 +168,7 @@ struct ChatSkin {
 
     // MARK: - 字号
 
-    /// 把设计稿里的固定字号按倍率缩放。11pt 是 HIG 的下限，缩到再小也不许破。
+    /// 把Tilia设计稿里的固定字号按倍率缩放。11pt 是 HIG 的下限，缩到再小也不许破。
     /// 2026-09-06 Tilia：「信息字号整体调小一个档」——档位名不动，整体乘 0.88（正好一档的差）。
     /// 2026-09-16 Tilia又要小一号：0.88 → 0.82（正文 16 → 13）。
     static let globalShrink: CGFloat = 0.85

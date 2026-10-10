@@ -28,7 +28,7 @@ struct BubbleStyle: Codable, Equatable, Hashable {
 
     /// 头像摆在哪
     enum Layout: String, Codable, CaseIterable {
-        case side      // 头像挨着这一串第一个气泡，整串缩进对齐（她给的参考图二）
+        case side      // 头像挨着这一串第一个气泡，整串缩进对齐（Tilia画的设计图第二张）
         case header    // 头像单独一行当这一串的抬头（2026-08-15 起的样子）
         case none      // 同上但不放头像
         var label: String {
@@ -62,7 +62,7 @@ struct BubbleStyle: Codable, Equatable, Hashable {
     var brightness: Double = 0.06
     /// 玻璃：内侧一层柔和高光
     var highlight: Bool = true
-    /// 玻璃：边框光 0~1（替掉参考图里的「背景饱和度」——iOS 不让 App 调毛玻璃的饱和度）
+    /// 玻璃：边框光 0~1（替掉设计图里的「背景饱和度」——iOS 不让 App 调毛玻璃的饱和度）
     var edgeLight: Double = 0.55
     var cornerRadius: Double = 18
     /// 尾巴 = 朝说话人那侧的下角收成小尖角
