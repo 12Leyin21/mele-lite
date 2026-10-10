@@ -24,6 +24,7 @@ final class SessionStore: ObservableObject {
             HostLink.save(url: u, token: args[i + 2])
         }
         LocalHost.shared.debugSeedKey()
+        LocalHost.shared.debugSeedGemini()
         // 自测（10-05）：SIMCTL_CHILD_LITE_TEST_SAY="<窗口编号>|<一句话>" 直接放进那个窗口的输入框（模拟器敲不了中文）
         if let say = ProcessInfo.processInfo.environment["LITE_TEST_SAY"], let bar = say.firstIndex(of: "|") {
             UserDefaults.standard.set(String(say[say.index(after: bar)...]), forKey: "chatDraft-\(say[..<bar])")

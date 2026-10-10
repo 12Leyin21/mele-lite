@@ -512,7 +512,8 @@ final class LocalBrain: @unchecked Sendable {
                 let lastChat = stored.last.map { LocalStore.date($0["at"]) }
                 let lastLetter = s.collection("drawer").filter { ($0["companion_id"] as? String) == cid }
                     .map { LocalStore.date($0["written_at"]) }.max()
-                guard LetterDesk.shouldWrite(lastLetter: lastLetter, lastChat: lastChat, now: Date()) else { continue }
+                let firstChat = stored.first.map { LocalStore.date($0["at"]) }
+                guard LetterDesk.shouldWrite(lastLetter: lastLetter, lastChat: lastChat, now: Date(), firstChat: firstChat) else { continue }
                 let zh = ((comp["settings"] as? [String: Any])?["lang"] as? String ?? "zh") == "zh"
                 let contact = Self.contact(comp, provider: provider)
                 let history: [Message] = stored.map {

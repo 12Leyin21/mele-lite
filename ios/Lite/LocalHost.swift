@@ -122,6 +122,13 @@ final class LocalHost: @unchecked Sendable {
               !keys.contains(where: { ($0["provider"] as? String) == "deepseek" }) else { return }
         _ = addKey(["provider": "deepseek", "api_key": key, "chat_model": "deepseek-flash"])
     }
+
+    /// 同上，Gemini（10-10：内测前用Tilia的免费 key 走一遍）
+    func debugSeedGemini() {
+        guard let key = ProcessInfo.processInfo.environment["LITE_TEST_GEMINI"], !key.isEmpty,
+              !keys.contains(where: { ($0["provider"] as? String) == "gemini" }) else { return }
+        _ = addKey(["provider": "gemini", "api_key": key, "chat_model": ProcessInfo.processInfo.environment["LITE_TEST_GEMINI_MODEL"] ?? "gemini-3.5-flash-lite"])
+    }
     #endif
 
     private func addKey(_ b: [String: Any]) -> LocalResponse {

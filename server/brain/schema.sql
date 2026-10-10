@@ -315,7 +315,7 @@ CREATE TABLE IF NOT EXISTS focus_said (             -- 专注时手机替它弹�
   message_id BIGINT,
   PRIMARY KEY (focus_id, key)
 );
-DROP TABLE IF EXISTS live_activities;          -- 灵动岛 10-02 拿掉了（Tilia：参考了一位博主的思路，决定不用）
+DROP TABLE IF EXISTS live_activities;          -- 灵动岛 10-02 拿掉了（Tilia决定不用）
 
 -- 饮食（09-29，搬自 fed-myself）：记在账号名下，不分联系人
 ALTER TABLE attachments ALTER COLUMN conversation_id DROP NOT NULL;   -- 饮食照片不挂在哪个窗口

@@ -1,13 +1,19 @@
 import Foundation
 
-/// 打开 App 时它可能给你留了一封信：上一封之后聊过天、且离上一封至少 20 小时，才写。
+/// 打开 App 时它可能给你留了一封信：上一封之后聊过天、且离上一封隔了 2～5 天，才写。
+/// （10-10 Tilia：原来隔 20 小时，天天聊就天天一封，太密）
 public enum LetterDesk {
-    public static let gap: TimeInterval = 20 * 3600
+    /// 离上一封隔几天：2～5 天里挑，按上一封的时间算——同一封之后每次打开算出来都一样，不是开一次掷一次
+    public static func gap(after lastLetter: Date) -> TimeInterval {
+        let days = 2 + Int(lastLetter.timeIntervalSince1970 / 60) % 4
+        return TimeInterval(days) * 86400
+    }
 
-    public static func shouldWrite(lastLetter: Date?, lastChat: Date?, now: Date) -> Bool {
+    /// firstChat：第一句话的时间。第一封信等认识满一天再写（10-10：新装聊两句、再打开就来一封「认识这段时间」，太快）
+    public static func shouldWrite(lastLetter: Date?, lastChat: Date?, now: Date, firstChat: Date? = nil) -> Bool {
         guard let lastChat else { return false }
-        guard let lastLetter else { return true }
-        return lastChat > lastLetter && now.timeIntervalSince(lastLetter) >= gap
+        guard let lastLetter else { return now.timeIntervalSince(firstChat ?? lastChat) >= 86400 }
+        return lastChat > lastLetter && now.timeIntervalSince(lastLetter) >= gap(after: lastLetter)
     }
 
     /// 写信那一轮的请求：平时的聊天当底子，末尾加一句「写信」的说明

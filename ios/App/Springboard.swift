@@ -246,6 +246,9 @@ struct Springboard: View {
     @State private var showMemory = false
     @AppStorage(MemoryLink.key) private var memoryConnected = false   // 接上 / 断开记忆库时图标跟着变
     @State private var wakeFor: HomeView.WakeTarget?
+    // 主屏导览（10-10 Tilia：新用户不知道设置在星星里）。旧首页那段 10-04 换成主屏后就没人放了
+    @State private var coachFrames: [String: CGRect] = [:]
+    @State private var showTour = false
 
     private let tick = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
     private var current: Int { min(max(page, 0), max(saved.pages.count - 1, 0)) }
@@ -339,6 +342,37 @@ struct Springboard: View {
         .alert("连着 Mele Host 时先收起来了", isPresented: $localOnlyAlert) { Button("好") {} } message: {
             Text("这个现在只在手机里做，还没搬到 Host 上。去 Me → Mele Host 断开，就回到手机里那份。")
         }
+        // 别的页上的图标也会报位置（在屏幕外），只留看得见的
+        .onPreferenceChange(CoachFrameKey.self) { f in
+            let screen = UIScreen.main.bounds
+            coachFrames = f.filter { screen.contains(CGPoint(x: $0.value.midX, y: $0.value.midY)) }
+        }
+        .overlay {
+            if showTour {
+                CoachOverlay(steps: [
+                    CoachStep(id: "me", text: String(localized: "设置都在这颗星星里：换模型和 key、外观、接记忆库")),
+                    CoachStep(id: "dock", text: String(localized: "长按任何一个图标：挪位置、加小组件、找回收起来的软件")),
+                ], frames: coachFrames) {
+                    withAnimation { showTour = false }
+                    CoachTour.done(CoachTour.homeKey)
+                }
+                .transition(.opacity)
+            }
+        }
+        .onAppear { armTour() }
+        .onChange(of: model.chat) { _, _ in armTour() }
+        .onChange(of: model.listOpen) { _, _ in armTour() }
+    }
+
+    /// 聊天页那段看完、回到主屏时放一次（看过记本机；Me 里「再看一遍导览」会重新排上）
+    private func armTour() {
+        guard !showTour, CoachTour.pending(CoachTour.homeKey), !CoachTour.pending(CoachTour.chatKey),
+              model.chat == nil, !model.listOpen else { return }
+        Task {
+            try? await Task.sleep(for: .seconds(0.8))
+            guard model.chat == nil, !model.listOpen else { return }
+            withAnimation { showTour = true }
+        }
     }
 
     // MARK: 几页横着滑（自己写的翻页：编辑时手指拖到边缘也能翻，系统的分页滚动做不到）
@@ -402,6 +436,7 @@ struct Springboard: View {
         let view = Group {
             if let app = item.app {
                 AppIcon(app: app, size: icon, showLabel: true, onRemove: editing ? { confirmRemove = item } : nil) { open(app) }
+                    .coachMark("me", when: app == .me)
             } else if let slot = item.widget {
                 widget(item, slot)
             }
@@ -702,6 +737,7 @@ struct Springboard: View {
             ForEach(Array(saved.dock.enumerated()), id: \.element) { n, app in
                 AppIcon(app: app, size: metrics.icon > 0 ? metrics.icon : 60, showLabel: false,
                         onRemove: editing ? { confirmRemove = HomeItem(id: Self.dockID(app), app: app) } : nil) { open(app) }
+                    .coachMark("me", when: app == .me)
                     .rotationEffect(.degrees(editing ? (wiggle ? 1.1 : -1.1) * (n.isMultiple(of: 2) ? -1 : 1) : 0))
                     .opacity(drag?.item.app == app ? 0 : 1)
                     .frame(maxWidth: .infinity)
@@ -716,6 +752,7 @@ struct Springboard: View {
             RoundedRectangle(cornerRadius: 30, style: .continuous).fill(theme.accentSoft.opacity(0.12))
             RoundedRectangle(cornerRadius: 30, style: .continuous).stroke(Color.white.opacity(0.45), lineWidth: 1)
         }
+        .coachMark("dock")
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
     }

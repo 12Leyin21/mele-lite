@@ -24,6 +24,7 @@ X：Tilia @M51_5194　小红书：Mele（94587369760）
 | 一起听、每日私选推歌 | Cove「一起听歌」搭建与整体架构指南 · 私选版（小红书 427689021） |
 | 动作卡片：它做了什么挂一张小卡 | open-watch-cinema「后端回查」教程 |
 | 手写独白 | tsuru0805 / monologue-stream |
+| 聊天日历：哪天聊过一眼看见 | tsuru0805 / chat-history-jump |
 | 腔调样本 | forge-picker |
 | 世界书 | Kelivo |
 | 导入角色卡 | Character Card V2 / V3 公开规范（SillyTavern 社区） |
@@ -81,6 +82,7 @@ X: Tilia @M51_5194 · Xiaohongshu (RED): Mele (94587369760)
 | Listening together, daily curated song picks | Cove "Listening Together" setup and architecture guide · curated edition (RED 427689021) |
 | Action cards: a small card for what it just did | open-watch-cinema's "backend lookup" tutorial |
 | Handwritten monologue | tsuru0805 / monologue-stream |
+| Chat calendar: see at a glance which days you talked | tsuru0805 / chat-history-jump |
 | Voice samples in the ledger | forge-picker |
 | Lorebook | Kelivo |
 | Character card import | Character Card V2 / V3 open spec (SillyTavern community) |

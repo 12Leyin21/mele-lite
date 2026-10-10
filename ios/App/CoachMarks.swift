@@ -18,6 +18,10 @@ extension View {
             Color.clear.preference(key: CoachFrameKey.self, value: [id: g.frame(in: .global)])
         })
     }
+
+    @ViewBuilder func coachMark(_ id: String, when on: Bool) -> some View {
+        if on { coachMark(id) } else { self }
+    }
 }
 
 struct CoachStep: Identifiable, Equatable {
@@ -91,8 +95,10 @@ struct CoachOverlay: View {
                         .transition(.opacity)
                 }
 
+                // 圈的东西在下半屏（比如 Dock 上的星星）：跳过挪到上面，别压着它（10-10）
+                let low = hole.map { $0.midY > geo.size.height * 0.6 } ?? false
                 VStack {
-                    Spacer()
+                    if !low { Spacer() }
                     HStack(spacing: 12) {
                         Spacer()
                         Text("\(index + 1) / \(steps.count)").font(Typo.number(Typo.Size.caption, .regular))
@@ -104,7 +110,9 @@ struct CoachOverlay: View {
                             .background(Capsule().fill(Color.black.opacity(0.35)))
                     }
                     .padding(.horizontal, 24)
-                    .padding(.bottom, 44)
+                    .padding(.bottom, low ? 0 : 44)
+                    .padding(.top, low ? 70 : 0)
+                    if low { Spacer() }
                 }
             }
             .animation(.snappy(duration: 0.3), value: index)

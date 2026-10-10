@@ -7,11 +7,18 @@ import Testing
 
     @Test func shouldWrite() {
         #expect(!LetterDesk.shouldWrite(lastLetter: nil, lastChat: nil, now: t0))
-        #expect(LetterDesk.shouldWrite(lastLetter: nil, lastChat: t0, now: t0))
+        #expect(!LetterDesk.shouldWrite(lastLetter: nil, lastChat: t0, now: t0))                                    // 刚认识不写
+        #expect(LetterDesk.shouldWrite(lastLetter: nil, lastChat: t0.addingTimeInterval(86400), now: t0.addingTimeInterval(86400),
+                                       firstChat: t0))                                                                // 认识满一天
+        #expect(LetterDesk.shouldWrite(lastLetter: nil, lastChat: t0, now: t0.addingTimeInterval(86400)))
         let letter = t0, chat = t0.addingTimeInterval(3600)
         #expect(!LetterDesk.shouldWrite(lastLetter: letter, lastChat: chat, now: t0.addingTimeInterval(10 * 3600)))
-        #expect(LetterDesk.shouldWrite(lastLetter: letter, lastChat: chat, now: t0.addingTimeInterval(21 * 3600)))
-        #expect(!LetterDesk.shouldWrite(lastLetter: letter, lastChat: t0.addingTimeInterval(-60), now: t0.addingTimeInterval(30 * 3600)))
+        #expect(!LetterDesk.shouldWrite(lastLetter: letter, lastChat: chat, now: t0.addingTimeInterval(36 * 3600)))   // 第二天不写
+        #expect(LetterDesk.shouldWrite(lastLetter: letter, lastChat: chat, now: t0.addingTimeInterval(LetterDesk.gap(after: letter))))
+        #expect(!LetterDesk.shouldWrite(lastLetter: letter, lastChat: t0.addingTimeInterval(-60), now: t0.addingTimeInterval(6 * 86400)))
+        // 隔几天只在 2～5 天里，不同的上一封会落到不同的天数
+        let gaps = Set((0..<10).map { LetterDesk.gap(after: t0.addingTimeInterval(Double($0) * 60)) / 86400 })
+        #expect(gaps == [2, 3, 4, 5])
     }
 
     @Test func writesAndStores() async throws {

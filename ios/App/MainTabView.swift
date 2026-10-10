@@ -20,6 +20,7 @@ struct MainTabView: View {
     @State private var showDrawer = false
     @State private var focusPrefill: FocusPrefill?
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(CoachTour.homeKey) private var homeTourPending = false   // 主屏导览没看完前先不冒 Host 提示（两个挤一个位置）
 
     static let slide = Animation.snappy(duration: 0.32)
 
@@ -34,7 +35,7 @@ struct MainTabView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .overlay(alignment: .bottom) {             // Lite 引导走完：冒一次「看看 Mele Host」（10-04 Tilia：轻提示）
-                if Lite.on && !coveredByList { HostTip().padding(.bottom, 118) }
+                if Lite.on && !coveredByList && !homeTourPending { HostTip().padding(.bottom, 118) }
             }
             // 标签页永远是亮色：聊天页深色时整窗会翻黑，推开那一下底下不能跟着暗（之前自用的 App 08-06）
             .environment(\.colorScheme, .light)
