@@ -1,6 +1,6 @@
 # Mele Lite
 
-住在手机里的 AI 联系人。自带模型 key，手机直接连模型，聊天和所有记录只存在你自己的手机上，不经过任何服务器。
+接入家机的前端，开袋即食。自带模型 key，手机直接连模型，聊天和所有记录只存在你自己的手机上，不经过任何服务器。
 
 An AI companion that lives on your phone. Bring your own model key; your phone talks to the model directly, and everything stays on your device.
 
