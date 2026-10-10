@@ -2,7 +2,7 @@
 
 接入家机的前端，开袋即食。自带模型 key，手机直接连模型，聊天和所有记录只存在你自己的手机上，不经过任何服务器。
 
-An AI companion that lives on your phone. Bring your own model key; your phone talks to the model directly, and everything stays on your device.
+A plug-and-play front end for your AI. Bring your own model key; your phone talks to the model directly, and everything stays on your device.
 
 TestFlight 上的 Mele Lite 就是这份代码编出来的。有 Mac 的话，也可以自己编、自己改。
 
